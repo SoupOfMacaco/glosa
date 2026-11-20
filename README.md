@@ -3,13 +3,20 @@
 </p>
 
 <h1 align="center">Glosa</h1>
-<p align="center"><b>Traductor en vivo para juegos</b> · gratis · Windows 10 y 11</p>
+<p align="center"><b>Traductor de escritorio en tiempo real</b> · gratis · Windows 10 y 11</p>
 
 > **¿Por qué "Glosa"?** Una glosa es una nota que se escribe junto a un texto para explicarlo o traducirlo. Las *Glosas Emilianenses*, anotaciones al margen de un texto en latín, se consideran de los primeros escritos en español. Esta app hace lo mismo: pone la traducción encima del texto, como una nota flotante.
 
-Aplicación gratuita para **Windows 10 y 11** que lee en tiempo real el texto en inglés de una zona de la pantalla (por ejemplo, el cuadro de diálogo de un juego) y te muestra la traducción al español en una ventana flotante, sin tener que pulsar nada cada vez que cambia el texto.
+**Glosa es un traductor de escritorio en tiempo real.** Marcas una o varias zonas de la pantalla y Glosa lee en vivo el texto en inglés que aparece en ellas. Te muestra la traducción al español en una ventana flotante, encima del texto o en una esquina, sin pulsar nada cada vez que cambia el texto.
 
-Se queda en segundo plano, junto al reloj, mientras juegas.
+Sirve para cualquier cosa que tenga texto en pantalla:
+
+- **Día a día:** programas, páginas o aplicaciones que solo están en inglés, chats, notificaciones.
+- **Trabajo y estudios:** documentación, herramientas o cursos en otro idioma (respetando la [licencia](#licencia-uso-personal-y-no-comercial)).
+- **Juegos:** diálogos, misiones y menús, con perfiles que se activan solos según el juego.
+- **Y más:** vídeos con subtítulos incrustados, emuladores, novelas visuales...
+
+Se queda en segundo plano, junto al reloj, mientras usas el ordenador.
 
 ```
  ┌───────────────────────────────────────────────┐   ┌──────────────────────────────┐
@@ -47,9 +54,9 @@ En el editor de zonas: **clic derecho** sobre una zona la quita, **Retroceso** q
 
 Todo lo demás está en el menú del icono de la bandeja (clic derecho): perfiles, ajustes, buscar actualizaciones, abrir la carpeta de datos y salir.
 
-### Perfiles por juego
+### Perfiles por programa o juego
 
-Cada juego pone los diálogos en un sitio distinto, así que las zonas se guardan en **perfiles**:
+Cada juego o programa pone el texto en un sitio distinto, así que las zonas se guardan en **perfiles**:
 
 - Si pulsas `Ctrl+Shift+T` **desde el juego**, las zonas se guardan en un perfil vinculado a ese juego (por su `.exe`), con el nombre de su ventana. Si ese juego no tenía perfil, se crea uno.
 - La próxima vez que abras ese juego, **Glosa cambia sola a su perfil** en cuanto la ventana del juego pasa a primer plano.
@@ -179,6 +186,8 @@ Resumen orientativo en español (el texto que vale legalmente es el del archivo 
 | Modificar el código para uso propio no comercial | Incluirla en productos o servicios comerciales |
 | Compartirla **gratis**, siempre con esta licencia y el aviso de copyright | Usarla en o para una empresa con fines de lucro |
 | Uso por organizaciones sin ánimo de lucro, centros educativos e instituciones públicas | Quitar la licencia o el aviso de copyright al compartirla |
+
+**¿Y en el trabajo?** Se permite para tus estudios o tu formación personal y en organizaciones sin ánimo de lucro, centros educativos e instituciones públicas. **No** se permite en el trabajo para una empresa con fines de lucro, porque eso cuenta como uso comercial; para eso hace falta permiso del autor.
 
 El software se ofrece **tal cual, sin garantías**.
 

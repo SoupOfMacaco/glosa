@@ -64,7 +64,7 @@ Type: files; Name: "{autodesktop}\Traductor en Vivo.lnk"
 Type: filesandordirs; Name: "{autoprograms}\Traductor en Vivo"
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; Comment: "Traductor en vivo para juegos"
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; Comment: "Traductor de escritorio en tiempo real"
 Name: "{group}\Desinstalar {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 

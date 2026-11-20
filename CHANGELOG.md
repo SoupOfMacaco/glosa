@@ -2,6 +2,12 @@
 
 Este proyecto usa [versionado semántico](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.3.1] - 2026-11-20
+
+- Nueva descripción: Glosa es un **traductor de escritorio en tiempo real**, para el día a día, el trabajo o los estudios, los juegos y más, no solo para juegos.
+- Los textos de la app (bienvenida, menú de perfiles, icono de la bandeja) hablan de "programa o juego".
+- El README aclara qué uso en el trabajo permite la licencia.
+
 ## [1.3.0] - 2026-11-20
 
 - **Transparencia del texto flotante**: nuevo control "Opacidad del texto" (20-100 %) en Ajustes.

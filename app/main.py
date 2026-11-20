@@ -147,13 +147,13 @@ class Controller(QObject):
         m.addAction("Renombrar perfil actual…", self.rename_profile)
         game = self.profile.get("game")
         if game:
-            m.addAction(f"Desvincular del juego ({game})", self.unlink_game)
+            m.addAction(f"Desvincular del programa ({game})", self.unlink_game)
         elif self.fg_exe:
-            m.addAction(f"Vincular al juego {self.fg_exe}", self.link_game)
+            m.addAction(f"Vincular al programa {self.fg_exe}", self.link_game)
         a = m.addAction("Eliminar perfil actual…", self.delete_profile)
         a.setEnabled(len(self.cfg.profiles) > 1)
         m.addSeparator()
-        auto = QAction("Cambiar de perfil automáticamente según el juego", m, checkable=True)
+        auto = QAction("Cambiar de perfil automáticamente según el programa o juego", m, checkable=True)
         auto.setChecked(self.cfg.auto_profile)
         auto.toggled.connect(self.set_auto_profile)
         m.addAction(auto)
@@ -186,9 +186,10 @@ class Controller(QObject):
             APP_NAME,
             f"Bienvenido a {APP_NAME}, {APP_TAGLINE.lower()}.\n\n"
             "Se queda en la bandeja del sistema (junto al reloj) y lee en vivo las zonas que marques. "
-            "Puedes marcar varias (por ejemplo, diálogos arriba y abajo) y se guardan en un perfil por juego.\n\n"
-            f"Atajos:\n{keys}{extra}\n\nAbre el juego y pulsa Ctrl+Shift+T desde él: el perfil queda asociado "
-            "a ese juego y se activa solo la próxima vez que lo abras.",
+            "Sirve para el día a día, para estudiar, para juegos, vídeos o cualquier programa en otro idioma. "
+            "Puedes marcar varias zonas (por ejemplo, diálogos arriba y abajo) y se guardan en un perfil por programa.\n\n"
+            f"Atajos:\n{keys}{extra}\n\nAbre el programa o juego y pulsa Ctrl+Shift+T desde él: el perfil queda asociado "
+            "a ese programa y se activa solo la próxima vez que lo abras.",
         )
         box.setIconPixmap(QPixmap(str(resource_path("assets", "logo.png"))).scaledToWidth(96, Qt.SmoothTransformation))
         box.exec()
@@ -278,7 +279,7 @@ class Controller(QObject):
         if self.cfg.auto_profile and not self.selector.is_active():
             p = self.cfg.profile_for_game(exe)
             if p and p["name"] != self.cfg.active_profile:
-                self.switch_profile(p["name"], reason="juego detectado")
+                self.switch_profile(p["name"], reason="programa detectado")
 
     def switch_profile(self, name: str, reason: str = ""):
         if not self.cfg.get_profile(name):

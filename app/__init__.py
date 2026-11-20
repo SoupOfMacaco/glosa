@@ -1,8 +1,8 @@
 """Glosa: traduce en tiempo real el texto de una zona de la pantalla."""
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 APP_NAME = "Glosa"
-APP_TAGLINE = "Traductor en vivo para juegos"
+APP_TAGLINE = "Traductor de escritorio en tiempo real"
 APP_ID = "Glosa"
 GITHUB_REPO = "SoupOfMacaco/glosa"
 
