@@ -53,6 +53,7 @@ class Translator:
         self._db.commit()
         self._glossary = self._load_glossary()
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="traductor")
+        self._paused_until: dict[str, float] = {}
         self._session = requests.Session()
         self._session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 
@@ -136,8 +137,13 @@ class Translator:
             raise ValueError(data.get("responseDetails") or "error de MyMemory")
         return data["responseData"]["translatedText"], self.source_lang
 
+    RATE_LIMIT_PAUSE = 300  # segundos sin usar un servicio que nos ha limitado (HTTP 429)
+
     def translate_online(self, text: str) -> TranslationResult:
+        now = time.time()
         for name, fn in (("Google", self._google), ("MyMemory", self._mymemory)):
+            if self._paused_until.get(name, 0) > now:
+                continue  # este servicio nos limitó hace poco: probamos el siguiente
             try:
                 out, detected = fn(text)
                 if detected and detected.split("-")[0] == self.target_lang:
@@ -145,6 +151,13 @@ class Translator:
                     return TranslationResult(text, text, SOURCE_SAME)
                 self._store(text, out, name)
                 return TranslationResult(text, out, name)
+            except requests.HTTPError as e:
+                if e.response is not None and e.response.status_code == 429:
+                    self._paused_until[name] = now + self.RATE_LIMIT_PAUSE
+                    log.warning("%s limita las peticiones (429): se pausa %d s y se usa el siguiente servicio",
+                                name, self.RATE_LIMIT_PAUSE)
+                else:
+                    log.warning("Fallo al traducir con %s: %s", name, e)
             except Exception as e:
                 log.warning("Fallo al traducir con %s: %s", name, e)
         return TranslationResult(text, text, SOURCE_OFFLINE, ok=False)

@@ -6,11 +6,13 @@ from logging.handlers import RotatingFileHandler
 
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QIcon, QPixmap
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication, QInputDialog, QMenu, QMessageBox, QProgressDialog, QSystemTrayIcon
 
 from . import APP_ID, APP_NAME, APP_TAGLINE, GITHUB_REPO, LEGACY_APP_ID, __version__, ocr, winutil
 from .config import DEFAULT_PROFILE, MODE_BOTH, MODE_CORNER, MODE_FLOAT, MODE_LABELS, MODES, Config
 from .hotkeys import HOTKEYS, HotkeyManager
+from .main_window import MainWindow
 from .overlay import CornerOverlay, FloatingOverlay, physical_to_logical
 from .paths import data_dir, resource_path
 from .selector import RegionSelector
@@ -20,6 +22,7 @@ from .updater import Updater
 from .worker import LiveWorker
 
 log = logging.getLogger("app")
+IPC_NAME = "GlosaIPC"
 
 
 def setup_logging():
@@ -72,9 +75,18 @@ class Controller(QObject):
         self.hotkeys.register_all()
         self.hotkeys.triggered.connect(self.on_hotkey)
 
+        self.window = None
+        self._reopen_window_after_edit = False
         self._build_tray()
+        self.window = MainWindow(self)
         self.start_workers()
         self.apply_style()
+
+        # Si se abre Glosa otra vez (acceso directo, menú Inicio...), la instancia ya abierta muestra su ventana
+        self.ipc = QLocalServer(self)
+        QLocalServer.removeServer(IPC_NAME)
+        self.ipc.listen(IPC_NAME)
+        self.ipc.newConnection.connect(self._on_ipc)
 
         self.fg_timer = QTimer(self)
         self.fg_timer.timeout.connect(self.watch_foreground)
@@ -99,6 +111,10 @@ class Controller(QObject):
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self.icon)
         menu = QMenu()
+        open_act = menu.addAction("Abrir Glosa", self.show_window)
+        f = open_act.font()
+        f.setBold(True)
+        open_act.setFont(f)
         self.act_profile_title = menu.addAction("")
         self.act_profile_title.setEnabled(False)
         menu.addAction("Editar zonas del perfil…  (Ctrl+Shift+T)", lambda: self.selector_start(from_menu=True))
@@ -159,8 +175,103 @@ class Controller(QObject):
         m.addAction(auto)
 
     def on_tray_activated(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
-            self.selector_start(from_menu=True)
+        if reason in (QSystemTrayIcon.DoubleClick, QSystemTrayIcon.Trigger):
+            self.show_window()
+
+    def show_window(self):
+        if self.window:
+            self.window.show_and_raise()
+
+    def _on_ipc(self):
+        sock = self.ipc.nextPendingConnection()
+        if sock:
+            sock.waitForReadyRead(500)
+            sock.readAll()
+            sock.disconnectFromServer()
+        self.show_window()
+
+    def refresh_window(self):
+        if self.window:
+            self.window.refresh()
+
+    # ---------- acciones usadas desde la ventana ----------
+    def edit_profile_zones(self, name: str):
+        """Abre el editor de zonas para un perfil concreto (lo activa si no lo está)."""
+        if self.selector.is_active():
+            return
+        self._reopen_window_after_edit = bool(self.window and self.window.isVisible())
+        if self.window:
+            self.window.hide()
+        if name != self.cfg.active_profile and self.cfg.get_profile(name):
+            self.cfg.active_profile = name
+            self.cfg.save()
+            self.start_workers()
+            self.apply_style()
+        # pequeña espera para que la ventana desaparezca antes de mostrar el editor
+        QTimer.singleShot(250, lambda: self.selector_start(from_menu=True))
+
+    def _after_edit(self):
+        if self._reopen_window_after_edit:
+            self._reopen_window_after_edit = False
+            self.show_window()
+
+    def rename_profile_to(self, old: str, new: str):
+        p = self.cfg.get_profile(old)
+        if not p or not new.strip() or new.strip() == old:
+            return
+        p["name"] = self.cfg.unique_name(new.strip())
+        if self.cfg.active_profile == old:
+            self.cfg.active_profile = p["name"]
+        self.cfg.save()
+        self.update_tooltip()
+
+    def set_profile_game(self, name: str, exe: str):
+        p = self.cfg.get_profile(name)
+        if not p:
+            return
+        exe = (exe or "").lower()
+        if exe:
+            other = self.cfg.profile_for_game(exe)
+            if other and other is not p:
+                other["game"] = ""  # un programa solo puede estar vinculado a un perfil
+        p["game"] = exe
+        self.cfg.save()
+        self.update_tooltip()
+
+    def remove_profile_zone(self, name: str, index: int):
+        p = self.cfg.get_profile(name)
+        if p and 0 <= index < len(p["regions"]):
+            del p["regions"][index]
+            self.cfg.save()
+            if name == self.cfg.active_profile:
+                self.start_workers()
+                self.apply_style()
+            self.update_tooltip()
+
+    def delete_profile_named(self, name: str):
+        p = self.cfg.get_profile(name)
+        if not p or len(self.cfg.profiles) <= 1:
+            return
+        self.cfg.profiles.remove(p)
+        if name == self.cfg.active_profile:
+            self.switch_profile(self.cfg.profiles[0]["name"])
+        else:
+            self.cfg.save()
+            self.update_tooltip()
+
+    def set_opacity(self, background: int, text: int):
+        self.cfg.opacity, self.cfg.text_opacity = background, text
+        self.cfg.save()
+        self.apply_style()
+
+    def set_autostart(self, on: bool):
+        self.cfg.autostart = on
+        self.cfg.save()
+        winutil.set_autostart(on, APP_ID)
+
+    def set_check_updates(self, on: bool):
+        self.cfg.check_updates = on
+        self.cfg.save()
 
     def update_tooltip(self):
         n = len(self.regions)
@@ -169,6 +280,7 @@ class Controller(QObject):
             state = "sin zonas: pulsa Ctrl+Shift+T"
         self.tray.setToolTip(f"{APP_NAME} {__version__} · {APP_TAGLINE}\nPerfil: {self.profile['name']} · {state}")
         self.act_profile_title.setText(f"Perfil: {self.profile['name']}  ·  {n} zona(s)")
+        self.refresh_window()
 
     def notify(self, title: str, msg: str):
         self.tray.showMessage(title, msg, self.icon, 4000)
@@ -195,6 +307,9 @@ class Controller(QObject):
         box.exec()
         self.cfg.first_run = False
         self.cfg.save()
+        self.show_window()
+        if self.window:
+            self.window.nav.setCurrentRow(1)  # Perfiles: lo primero es marcar las zonas
 
     # ---------- lectura en vivo ----------
     def start_workers(self):
@@ -232,6 +347,8 @@ class Controller(QObject):
         if index >= len(self.floats):
             return  # resultado de un perfil anterior
         log.info("[zona %d · %s] %r -> %r", index + 1, source, original, translation)
+        if self.window:
+            self.window.add_history(index, original, translation, source)
         self.zone_has_text[index] = True
         self.floats[index].set_text(translation, offline=not ok)
         self.corner.set_entry(index, original, translation, source, offline=not ok)
@@ -387,6 +504,7 @@ class Controller(QObject):
         game = f" · {p['game']}" if p.get("game") else ""
         self.notify(f"Perfil: {p['name']}", f"{len(regions)} zona(s) guardadas{game}")
         log.info("Perfil %s: zonas %s, juego %s", p["name"], regions, p.get("game"))
+        self._after_edit()
 
     def on_selector_canceled(self):
         if self._pending_new_profile:
@@ -399,6 +517,7 @@ class Controller(QObject):
             self.start_workers()
             self.apply_style()
         self.refresh_overlays()
+        self._after_edit()
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -413,12 +532,14 @@ class Controller(QObject):
         self.hidden = not self.hidden
         self.act_hide.setText(("Mostrar" if self.hidden else "Ocultar") + " traducción  (Ctrl+Shift+H)")
         self.refresh_overlays()
+        self.refresh_window()
 
     def set_mode(self, mode):
         self.cfg.display_mode = mode
         self.cfg.save()
         self.mode_actions[mode].setChecked(True)
         self.refresh_overlays()
+        self.refresh_window()
 
     def cycle_mode(self):
         nxt = MODES[(MODES.index(self.cfg.display_mode) + 1) % len(MODES)]
@@ -555,10 +676,27 @@ class Controller(QObject):
         self.app.quit()
 
 
+def _ask_running_instance_to_show() -> None:
+    winutil.allow_any_foreground()
+    sock = QLocalSocket()
+    sock.connectToServer(IPC_NAME)
+    if sock.waitForConnected(1500):
+        sock.write(b"show")
+        sock.flush()
+        sock.waitForBytesWritten(500)
+        sock.disconnectFromServer()
+
+
 def main():
     setup_logging()
+    minimized = "--minimized" in sys.argv
     if not winutil.acquire_single_instance(f"{APP_ID}Mutex"):
+        # Ya está abierta en segundo plano: le pedimos que muestre su ventana
+        if not minimized:
+            QApplication(sys.argv)
+            _ask_running_instance_to_show()
         return 0
+    winutil.set_app_id("SoupOfMacaco.Glosa")
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(__version__)
@@ -567,5 +705,7 @@ def main():
         QMessageBox.critical(None, APP_NAME, "No se encontró la bandeja del sistema.")
         return 1
     log.info("Iniciando %s %s (Windows build %s)", APP_NAME, __version__, winutil.windows_build())
-    controller = Controller(app)  # noqa: F841 (mantener referencia viva)
+    controller = Controller(app)
+    if not minimized and not controller.cfg.first_run:
+        QTimer.singleShot(0, controller.show_window)
     return app.exec()

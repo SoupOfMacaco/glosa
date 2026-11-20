@@ -52,7 +52,16 @@ En el editor de zonas: **clic derecho** sobre una zona la quita, **Retroceso** q
 | `Ctrl+Shift+M` | Cambiar el modo: flotante, esquina o ambos |
 | `Ctrl+Shift+H` | Ocultar / mostrar la traducción |
 
-Todo lo demás está en el menú del icono de la bandeja (clic derecho): perfiles, ajustes, buscar actualizaciones, abrir la carpeta de datos y salir.
+### La ventana de Glosa
+
+Glosa trabaja en segundo plano, pero tiene una **ventana principal** para controlarlo todo con comodidad. Se abre con el acceso directo, desde el menú Inicio o haciendo clic en el icono de la bandeja:
+
+- **Inicio**: estado actual, perfil activo, botones para editar zonas, pausar y ocultar, modo de visualización, opacidad y la última traducción.
+- **Perfiles**: crear, duplicar, renombrar, activar y eliminar perfiles; vincular cada uno a un programa eligiéndolo de la lista de programas abiertos; ver sus zonas y editarlas en pantalla.
+- **Historial**: las últimas traducciones de la sesión, para releerlas o copiarlas.
+- **Ajustes** y **Acerca de**.
+
+Cerrar la ventana **no cierra Glosa**: sigue traduciendo en segundo plano. Para salir del todo, usa **Salir** en el menú del icono de la bandeja (clic derecho). Al iniciar con Windows, arranca directamente en segundo plano.
 
 ### Perfiles por programa o juego
 

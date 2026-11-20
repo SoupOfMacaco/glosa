@@ -48,14 +48,12 @@ def cursor_pos_physical() -> tuple[int, int]:
 SHELL_PROCESSES = {
     "explorer.exe", "shellexperiencehost.exe", "searchhost.exe", "searchapp.exe",
     "startmenuexperiencehost.exe", "lockapp.exe", "applicationframehost.exe", "taskmgr.exe",
+    "textinputhost.exe", "systemsettings.exe",
 }
 
 
-def foreground_app() -> tuple[str, str]:
-    """(nombre del .exe en minúsculas, título de la ventana) de la ventana en primer plano."""
-    hwnd = user32.GetForegroundWindow()
-    if not hwnd:
-        return "", ""
+def _window_info(hwnd) -> tuple[str, str]:
+    """(.exe en minúsculas, título) de una ventana; vacío si es nuestra o del propio Windows."""
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     if pid.value == os.getpid():
@@ -78,6 +76,51 @@ def foreground_app() -> tuple[str, str]:
     return exe, title_buf.value
 
 
+def foreground_app() -> tuple[str, str]:
+    """(nombre del .exe en minúsculas, título de la ventana) de la ventana en primer plano."""
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return "", ""
+    return _window_info(hwnd)
+
+
+def list_windows() -> list[tuple[str, str]]:
+    """Programas con ventanas visibles: lista de (.exe, título), uno por programa."""
+    found: dict[str, str] = {}
+    proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def callback(hwnd, _):
+        if user32.IsWindowVisible(hwnd) and user32.GetWindowTextLengthW(hwnd) > 0:
+            exe, title = _window_info(hwnd)
+            if exe and exe not in found:
+                found[exe] = title
+        return True
+
+    user32.EnumWindows(proc(callback), 0)
+    return sorted(found.items(), key=lambda kv: kv[1].lower())
+
+
+def set_app_id(app_id: str) -> None:
+    """Identificador propio para Windows: la barra de tareas muestra el icono de Glosa y no el de Python."""
+    try:
+        ctypes.WinDLL("shell32").SetCurrentProcessExplicitAppUserModelID(ctypes.c_wchar_p(app_id))
+    except Exception:
+        log.debug("No se pudo fijar el AppUserModelID", exc_info=True)
+
+
+def allow_any_foreground() -> None:
+    """Permite que otra instancia de la app pase su ventana a primer plano (la pide esta, que la abrió el usuario)."""
+    user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
+
+
+def bring_to_front(hwnd: int) -> None:
+    """Restaura la ventana y la pone delante de todo."""
+    SW_RESTORE = 9
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, SW_RESTORE)
+    user32.SetForegroundWindow(hwnd)
+
+
 _mutex = None
 
 
@@ -90,10 +133,11 @@ def acquire_single_instance(name: str) -> bool:
 
 
 def _exe_command() -> str:
+    # --minimized: al iniciar con Windows se queda en la bandeja sin abrir la ventana
     if getattr(sys, "frozen", False):
-        return f'"{sys.executable}"'
+        return f'"{sys.executable}" --minimized'
     pyw = sys.executable.replace("python.exe", "pythonw.exe")
-    return f'"{pyw}" -m app'
+    return f'"{pyw}" -m app --minimized'
 
 
 def set_autostart(enabled: bool, value_name: str) -> None:

@@ -2,6 +2,18 @@
 
 Este proyecto usa [versionado semántico](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.4.0] - 2026-11-20
+
+- **Ventana principal** con barra lateral:
+  - **Inicio**: estado, perfil activo, botones rápidos (editar zonas, pausar, ocultar), modo de visualización, opacidad y la última traducción.
+  - **Perfiles**: crear, duplicar, renombrar, activar y eliminar perfiles; vincularlos a un programa eligiéndolo de la lista de programas abiertos; ver y quitar zonas y editarlas en pantalla.
+  - **Historial**: las últimas traducciones de la sesión, con un botón para copiarlas.
+  - **Ajustes** y **Acerca de**.
+- Abrir Glosa (acceso directo, menú Inicio, clic en el icono de la bandeja) muestra la ventana aunque ya esté en segundo plano. Cerrar la ventana no cierra Glosa.
+- Al iniciar con Windows, Glosa arranca en segundo plano, sin abrir la ventana.
+- La barra de tareas muestra el icono de Glosa.
+- Si Google limita las peticiones (error 429), Glosa deja de usarlo durante 5 minutos y traduce con MyMemory.
+
 ## [1.3.3] - 2026-11-20
 
 - **Arreglo de las actualizaciones**: si Glosa estaba abierta, el instalador en modo silencioso, que es el que usa el botón "Actualizar" de la app, se cancelaba sin avisar. Ahora espera a que Glosa se cierre y, si sigue abierta, la cierra él mismo. Al instalar a mano, avisa de que la va a cerrar.

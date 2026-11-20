@@ -21,14 +21,14 @@ a = Analysis(
     hiddenimports=hiddenimports,
     excludes=[
         "tkinter", "numpy", "setuptools", "unittest", "pydoc",
-        "PySide6.QtNetwork", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtPdf", "PySide6.QtOpenGL",
+        "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtPdf", "PySide6.QtOpenGL",
     ],
     noarchive=False,
 )
 
 # Quitar partes de Qt que la app no usa (reduce mucho el tamaño)
 DROP = (
-    "opengl32sw.dll", "Qt6Pdf", "Qt6Qml", "Qt6Quick", "Qt6Network", "Qt6OpenGL", "Qt6VirtualKeyboard",
+    "opengl32sw.dll", "Qt6Pdf", "Qt6Qml", "Qt6Quick", "Qt6OpenGL", "Qt6VirtualKeyboard",
     "libcrypto-3-x64", "libssl-3-x64", "qtuiotouchplugin", "qpdf", "qnetworklistmanager", "qtls",
     "PySide6\\translations", "PySide6/translations",
 )
