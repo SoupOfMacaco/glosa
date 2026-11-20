@@ -28,6 +28,9 @@ PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
 OutputBaseFilename=Glosa-Setup-{#AppVersion}
 SetupIconFile=..\assets\icon.ico
+; Muestra la licencia (uso no comercial) y hay que aceptarla para instalar. Las actualizaciones silenciosas no la muestran.
+LicenseFile=..\LICENSE
+AppCopyright=Copyright (c) 2026 SoupOfMacaco. Uso no comercial (PolyForm Noncommercial 1.0.0).
 WizardSmallImageFile=..\assets\wizard-small.bmp
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}

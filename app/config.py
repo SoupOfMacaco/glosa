@@ -50,7 +50,8 @@ class Config:
     float_position: str = FLOAT_COVER
     corner: str = "sup-der"
     font_size: int = 15
-    opacity: int = 88               # 30..100 %
+    opacity: int = 88               # opacidad del fondo, 0..100 %
+    text_opacity: int = 100         # opacidad del texto, 20..100 %
     interval_ms: int = 250          # cada cuánto se mira la zona
     wait_typing: bool = True        # esperar a que el texto deje de "escribirse"
     settle_ms: int = 300

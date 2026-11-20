@@ -1,6 +1,6 @@
 """Glosa: traduce en tiempo real el texto de una zona de la pantalla."""
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 APP_NAME = "Glosa"
 APP_TAGLINE = "Traductor en vivo para juegos"
 APP_ID = "Glosa"

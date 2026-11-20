@@ -2,6 +2,13 @@
 
 Este proyecto usa [versionado semántico](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.3.0] - 2026-11-20
+
+- **Transparencia del texto flotante**: nuevo control "Opacidad del texto" (20-100 %) en Ajustes.
+- La "Opacidad del fondo" ahora llega hasta 0 %, es decir, sin fondo. Con poco fondo, el texto lleva un contorno oscuro para que se siga leyendo.
+- **Licencia**: el proyecto pasa de MIT a **PolyForm Noncommercial 1.0.0**. Se permite el uso personal y no comercial y no se permite ningún uso comercial. El instalador muestra la licencia y hay que aceptarla.
+- **Vista previa en vivo**: al mover los controles de opacidad o tamaño de letra, la traducción en pantalla cambia al momento. Si no hay ninguna traducción, aparece un texto de ejemplo. Al pulsar Cancelar, todo vuelve como estaba.
+
 ## [1.2.0] - 2026-11-20
 
 - **Varias zonas a la vez**: el editor de zonas (`Ctrl+Shift+T`) permite marcar varias, por ejemplo diálogos arriba y abajo. Cada zona tiene su propio lector y su traducción flotante, y en la esquina se apilan como "Zona 1", "Zona 2"...

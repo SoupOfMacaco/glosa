@@ -29,7 +29,21 @@ def _combo(options: dict, current: str) -> QComboBox:
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, config, ocr_language: str, memory_size: int, on_install_english, on_clear_memory, parent=None):
+    @staticmethod
+    def _slider(lo: int, hi: int, value: int):
+        s = QSlider(Qt.Horizontal)
+        s.setRange(lo, hi)
+        s.setValue(max(lo, min(hi, value)))
+        label = QLabel(f"{s.value()} %")
+        label.setMinimumWidth(40)
+        s.valueChanged.connect(lambda v: label.setText(f"{v} %"))
+        row = QHBoxLayout()
+        row.addWidget(s)
+        row.addWidget(label)
+        return s, row
+
+    def __init__(self, config, ocr_language: str, memory_size: int, on_install_english, on_clear_memory,
+                 on_preview=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Ajustes · Glosa")
         self.setMinimumWidth(460)
@@ -45,9 +59,9 @@ class SettingsDialog(QDialog):
         self.font_size = QSpinBox()
         self.font_size.setRange(9, 40)
         self.font_size.setValue(config.font_size)
-        self.opacity = QSlider(Qt.Horizontal)
-        self.opacity.setRange(30, 100)
-        self.opacity.setValue(config.opacity)
+        self.opacity, opacity_row = self._slider(0, 100, config.opacity)
+        self.text_opacity, text_row = self._slider(20, 100, config.text_opacity)
+        self.opacity.setToolTip("0 % = sin fondo (el texto lleva un contorno oscuro para que se lea)")
         self.show_original = QCheckBox("Mostrar también el texto original en la esquina")
         self.show_original.setChecked(config.show_original)
         self.hide_empty = QCheckBox("Ocultar la traducción cuando no hay texto")
@@ -56,9 +70,16 @@ class SettingsDialog(QDialog):
         f.addRow("Flotante:", self.float_pos)
         f.addRow("Esquina:", self.corner)
         f.addRow("Tamaño de letra:", self.font_size)
-        f.addRow("Opacidad del fondo:", self.opacity)
+        f.addRow("Opacidad del fondo:", opacity_row)
+        f.addRow("Opacidad del texto:", text_row)
         f.addRow(self.show_original)
         f.addRow(self.hide_empty)
+        # Vista previa en vivo: la traducción en pantalla cambia mientras mueves los controles
+        if on_preview:
+            preview = lambda *_: on_preview(self.font_size.value(), self.opacity.value(), self.text_opacity.value())
+            self.opacity.valueChanged.connect(preview)
+            self.text_opacity.valueChanged.connect(preview)
+            self.font_size.valueChanged.connect(preview)
         lay.addWidget(g)
 
         # --- Lectura ---
@@ -123,6 +144,7 @@ class SettingsDialog(QDialog):
         cfg.corner = self.corner.currentData()
         cfg.font_size = self.font_size.value()
         cfg.opacity = self.opacity.value()
+        cfg.text_opacity = self.text_opacity.value()
         cfg.show_original = self.show_original.isChecked()
         cfg.hide_when_empty = self.hide_empty.isChecked()
         cfg.interval_ms = self.interval.value()

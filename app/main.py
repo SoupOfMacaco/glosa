@@ -261,7 +261,7 @@ class Controller(QObject):
     def apply_style(self):
         rects = [physical_to_logical(r) for r in self.regions]
         for w in [self.corner, *self.floats]:
-            w.apply_style(self.cfg.font_size, self.cfg.opacity)
+            w.apply_style(self.cfg.font_size, self.cfg.opacity, self.cfg.text_opacity)
         for f, rect in zip(self.floats, rects):
             f.set_region(rect, self.cfg.float_position)
             f.update()
@@ -434,12 +434,41 @@ class Controller(QObject):
         }
         actions[hid]()
 
+    def preview_style(self, font_size: int, opacity: int, text_opacity: int):
+        """Aplica el estilo en vivo mientras se mueven los controles de Ajustes (con texto de ejemplo si hace falta)."""
+        sample = "Así se verá la traducción mientras juegas."
+        for i, f in enumerate(self.floats):
+            if not self.zone_has_text.get(i):
+                f.set_text(sample)
+                self.zone_has_text[i] = True
+                self._preview_samples.add(i)
+        if not self.corner.has_entries():
+            self.corner.set_entry(0, "This is how the translation will look.", sample, "vista previa")
+            self._preview_samples.add(-1)
+        for w in [self.corner, *self.floats]:
+            w.apply_style(font_size, opacity, text_opacity)
+            w._relayout()
+        self.refresh_overlays()
+
+    def _end_preview(self):
+        for i in self._preview_samples:
+            if i == -1:
+                self.corner.clear_entry(0)
+            else:
+                self.zone_has_text[i] = False
+        self._preview_samples = set()
+        self.apply_style()
+
     def open_settings(self):
+        self._preview_samples = set()
         dlg = SettingsDialog(
-            self.cfg, self.ocr_language, self.translator.memory_size(), self.install_english_ocr, self.translator.clear_memory
+            self.cfg, self.ocr_language, self.translator.memory_size(), self.install_english_ocr, self.translator.clear_memory,
+            on_preview=self.preview_style,
         )
         dlg.setWindowIcon(self.icon)
-        if dlg.exec():
+        accepted = dlg.exec()
+        self._end_preview()
+        if accepted:
             old_target = self.cfg.target_lang
             dlg.apply_to(self.cfg)
             self.cfg.save()

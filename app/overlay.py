@@ -49,7 +49,8 @@ class _Bubble(QWidget):
         self.original = ""
         self.offline = False
         self.font_size = 15
-        self.opacity = 88
+        self.opacity = 88        # opacidad del fondo, 0-100 %
+        self.text_opacity = 100  # opacidad del texto, 20-100 %
         self._excluded = False
 
     def showEvent(self, e):
@@ -57,8 +58,21 @@ class _Bubble(QWidget):
         if not self._excluded:
             self._excluded = winutil.exclude_from_capture(int(self.winId()))
 
-    def apply_style(self, font_size: int, opacity: int):
-        self.font_size, self.opacity = font_size, opacity
+    def apply_style(self, font_size: int, opacity: int, text_opacity: int = 100):
+        self.font_size = font_size
+        self.opacity = max(0, min(100, opacity))
+        self.text_opacity = max(20, min(100, text_opacity))
+        self.update()
+
+    def _draw_text(self, p: QPainter, rect: QRect, flags, text: str, rgb=(255, 255, 255)):
+        """Dibuja texto con la opacidad elegida. Con fondo muy transparente añade un contorno oscuro para que se lea."""
+        alpha = round(255 * self.text_opacity / 100)
+        if self.opacity < 45:
+            p.setPen(QColor(0, 0, 0, round(alpha * 0.9)))
+            for dx, dy in ((1, 1), (-1, -1), (1, -1), (-1, 1), (0, 2), (2, 0)):
+                p.drawText(rect.translated(dx, dy), flags, text)
+        p.setPen(QColor(*rgb, alpha))
+        p.drawText(rect, flags, text)
 
     def _font(self, size, bold=False) -> QFont:
         f = QFont("Segoe UI", 1)
@@ -69,10 +83,15 @@ class _Bubble(QWidget):
     def _paint_background(self, p: QPainter):
         path = QPainterPath()
         path.addRoundedRect(self.rect().adjusted(0, 0, -1, -1), 8, 8)
-        alpha = round(255 * max(30, min(100, self.opacity)) / 100)
-        p.fillPath(path, QColor(18, 18, 26, alpha))
-        p.setPen(QColor(255, 196, 0, 160) if self.offline else QColor(255, 255, 255, 40))
-        p.drawPath(path)
+        alpha = round(255 * self.opacity / 100)
+        if alpha:
+            p.fillPath(path, QColor(18, 18, 26, alpha))
+        if self.offline:
+            p.setPen(QColor(255, 196, 0, 160))
+            p.drawPath(path)
+        elif alpha:
+            p.setPen(QColor(255, 255, 255, round(40 * self.opacity / 100)))
+            p.drawPath(path)
 
 
 class FloatingOverlay(_Bubble):
@@ -129,10 +148,9 @@ class FloatingOverlay(_Bubble):
         p.setRenderHint(QPainter.Antialiasing)
         self._paint_background(p)
         p.setFont(self._font(getattr(self, "_draw_size", self.font_size), True))
-        p.setPen(QColor(255, 255, 255))
         rect = self.rect().adjusted(PAD, PAD, -PAD, -PAD)
         align = Qt.AlignVCenter | Qt.AlignLeft | Qt.TextWordWrap
-        p.drawText(rect, align, self.translation)
+        self._draw_text(p, rect, align, self.translation)
 
 
 class CornerOverlay(_Bubble):
@@ -212,19 +230,17 @@ class CornerOverlay(_Bubble):
                 p.setPen(QColor(255, 255, 255, 40))
                 p.drawLine(PAD, y + BLOCK_GAP // 2, width - PAD, y + BLOCK_GAP // 2)
                 y += BLOCK_GAP
-            p.setPen(QColor(255, 255, 255))
             p.setFont(self._font(self.font_size, True))
-            p.drawText(QRect(PAD, y, width - 2 * PAD, t_h), Qt.TextWordWrap, translation)
+            self._draw_text(p, QRect(PAD, y, width - 2 * PAD, t_h), Qt.TextWordWrap, translation)
             y += t_h
             if o_h:
-                p.setPen(QColor(190, 190, 200))
                 p.setFont(self._font(max(9, self.font_size - 4)))
-                p.drawText(QRect(PAD, y + 4, width - 2 * PAD, o_h), Qt.TextWordWrap, original)
+                self._draw_text(p, QRect(PAD, y + 4, width - 2 * PAD, o_h), Qt.TextWordWrap, original, (190, 190, 200))
                 y += o_h
-            p.setPen(QColor(255, 196, 0) if offline else QColor(140, 140, 155))
             p.setFont(self._font(10))
             label = "⚠ sin conexión: se reintentará" if offline else f"vía {source}"
             if self.zone_count > 1:
                 label = f"Zona {idx + 1}  ·  {label}"
-            p.drawText(QRect(PAD, y, width - 2 * PAD, footer), Qt.AlignRight | Qt.AlignVCenter, label)
+            color = (255, 196, 0) if offline else (160, 160, 175)
+            self._draw_text(p, QRect(PAD, y, width - 2 * PAD, footer), Qt.AlignRight | Qt.AlignVCenter, label, color)
             y += footer

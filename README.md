@@ -76,7 +76,10 @@ Cada juego pone los diálogos en un sitio distinto, así que las zonas se guarda
 - **Corrige errores típicos del OCR** con fuentes pixeladas (por ejemplo `suyvive` → `survive`).
 - **Las ventanas de traducción no reciben clics**: el ratón pasa a través, al juego.
 - **Actualizaciones automáticas.** Al iniciar comprueba si hay una versión nueva en GitHub. Si la hay, te pregunta, la descarga, se actualiza y se vuelve a abrir.
-- Ajustes: tamaño de letra, opacidad, esquina, idioma de destino (español, portugués, francés, italiano, alemán), inicio con Windows, etc.
+- **Transparencia ajustable**, con vista previa en vivo en Ajustes:
+  - **Opacidad del fondo**, de 0 % a 100 %. Al 0 % solo se ve el texto, con un contorno oscuro para que se lea sobre cualquier fondo.
+  - **Opacidad del texto**, de 20 % a 100 %, para que la traducción moleste lo menos posible.
+- Ajustes: tamaño de letra, esquina, idioma de destino (español, portugués, francés, italiano, alemán), inicio con Windows, etc.
 
 ## Qué NO hace (limitaciones)
 
@@ -164,6 +167,23 @@ py -3.12 -m venv .venv
 - Más servicios de traducción (DeepL con clave propia, LibreTranslate, modelos locales).
 - Editar a mano las traducciones guardadas.
 
-## Licencia
+## Licencia: uso personal y no comercial
 
-[MIT](LICENSE)
+Glosa se distribuye bajo la licencia **[PolyForm Noncommercial 1.0.0](LICENSE)**. **No se permite ningún uso comercial.**
+
+Resumen orientativo en español (el texto que vale legalmente es el del archivo [LICENSE](LICENSE), en inglés):
+
+| ✅ Se permite | ❌ No se permite |
+|---|---|
+| Usarla gratis para uso **personal y privado**: jugar, estudiar, aficiones | **Venderla**, cobrar por ella o por instalarla |
+| Modificar el código para uso propio no comercial | Incluirla en productos o servicios comerciales |
+| Compartirla **gratis**, siempre con esta licencia y el aviso de copyright | Usarla en o para una empresa con fines de lucro |
+| Uso por organizaciones sin ánimo de lucro, centros educativos e instituciones públicas | Quitar la licencia o el aviso de copyright al compartirla |
+
+El software se ofrece **tal cual, sin garantías**.
+
+Para un uso comercial hace falta un permiso aparte del autor: abre un *issue* en este repositorio.
+
+> Nota: las versiones 1.0.0 a 1.2.0 se publicaron por error con licencia MIT. Desde la 1.3.0, todo el proyecto usa PolyForm Noncommercial. Esto no es asesoramiento legal.
+
+Copyright © 2026 SoupOfMacaco.
