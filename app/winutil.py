@@ -100,6 +100,26 @@ def list_windows() -> list[tuple[str, str]]:
     return sorted(found.items(), key=lambda kv: kv[1].lower())
 
 
+GWL_EXSTYLE = -20
+WS_EX_TRANSPARENT = 0x20
+user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
+user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
+user32.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t]
+
+
+def set_click_through(hwnd: int, enabled: bool) -> None:
+    """Con enabled=True el ratón atraviesa la ventana (llega al juego); con False la ventana recibe los clics."""
+    style = user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE)
+    new = (style | WS_EX_TRANSPARENT) if enabled else (style & ~WS_EX_TRANSPARENT)
+    if new != style:
+        user32.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new)
+
+
+def alt_pressed() -> bool:
+    return bool(user32.GetAsyncKeyState(0x12) & 0x8000)  # VK_MENU
+
+
 def set_app_id(app_id: str) -> None:
     """Identificador propio para Windows: la barra de tareas muestra el icono de Glosa y no el de Python."""
     try:

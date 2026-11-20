@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 # Empaquetado con PyInstaller:  pyinstaller Glosa.spec --noconfirm
-from PyInstaller.utils.hooks import collect_all, collect_data_files
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 datas = [("app/data", "app/data"), ("assets", "assets")]
 binaries = []
@@ -12,6 +12,8 @@ for pkg in ("winrt",):
     binaries += b
     hiddenimports += h
 datas += collect_data_files("spellchecker")
+# Voz de Windows (SAPI) a través de COM
+hiddenimports += collect_submodules("comtypes")
 
 a = Analysis(
     ["run.py"],

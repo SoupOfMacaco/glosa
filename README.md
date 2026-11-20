@@ -51,6 +51,9 @@ En el editor de zonas: **clic derecho** sobre una zona la quita, **Retroceso** q
 | `Ctrl+Shift+P` | Pausar / reanudar |
 | `Ctrl+Shift+M` | Cambiar el modo: flotante, esquina o ambos |
 | `Ctrl+Shift+H` | Ocultar / mostrar la traducción |
+| `Ctrl+Shift+L` | Leer en voz alta la última traducción |
+| `Alt` + clic | Copiar una traducción en pantalla |
+| `Alt` + clic derecho | Corregir una traducción en pantalla |
 
 ### La ventana de Glosa
 
@@ -92,6 +95,10 @@ Cada juego o programa pone el texto en un sitio distinto, así que las zonas se 
 - **Corrige errores típicos del OCR** con fuentes pixeladas (por ejemplo `suyvive` → `survive`).
 - **Las ventanas de traducción no reciben clics**: el ratón pasa a través, al juego.
 - **Actualizaciones automáticas.** Al iniciar comprueba si hay una versión nueva en GitHub. Si la hay, te pregunta, la descarga, se actualiza y se vuelve a abrir.
+- **Copiar y corregir desde la propia traducción**: mantén **Alt** y haz clic en una traducción en pantalla para copiarla, o **Alt + clic derecho** para corregirla. Mientras mantienes Alt, las traducciones muestran un borde ámbar; el resto del tiempo el ratón las atraviesa y llega al juego.
+- **Correcciones que se recuerdan**: si una traducción es mala, corrígela (con Alt + clic derecho o desde el Historial) y Glosa usará siempre tu versión cuando vuelva a aparecer ese texto.
+- **Glosario por perfil**: nombres y términos que se traducen siempre igual o que no se traducen, por ejemplo `Mercenary → Mercenario` o `Kylian → (no traducir)`. Se gestiona en la página Perfiles.
+- **Lectura en voz alta** con las voces que trae Windows, gratis y sin internet. Puede leer cada traducción nueva o solo la última con `Ctrl+Shift+L`. Se puede elegir la voz y la velocidad.
 - **Transparencia ajustable**, con vista previa en vivo en Ajustes:
   - **Opacidad del fondo**, de 0 % a 100 %. Al 0 % solo se ve el texto, con un contorno oscuro para que se lea sobre cualquier fondo.
   - **Opacidad del texto**, de 20 % a 100 %, para que la traducción moleste lo menos posible.
@@ -101,7 +108,9 @@ Cada juego o programa pone el texto en un sitio distinto, así que las zonas se 
 
 - **No funciona con juegos en "pantalla completa exclusiva".** Windows no deja dibujar ventanas encima. Usa **ventana sin bordes** (borderless / windowed fullscreen), que casi todos los juegos tienen.
 - **No es perfecta leyendo.** El OCR puede fallar alguna letra con fuentes muy estilizadas, texto sobre fondos muy cargados o letras muy pequeñas. Marcar solo el cuadro de texto, sin decoración alrededor, ayuda mucho.
-- **La traducción es automática.** A veces sale literal o pierde el tono de un personaje.
+- **La traducción es automática.** A veces sale literal o pierde el tono de un personaje. Para eso están las correcciones y el glosario.
+- **El glosario no ajusta el género ni el número de las palabras de alrededor.** Por ejemplo, puede salir "un Armadura Celeste". Si pasa a menudo con una frase, corrígela a mano y quedará bien para siempre.
+- **La voz depende de las voces instaladas en Windows.** Normalmente hay al menos una en español; se pueden añadir más en Configuración de Windows → Hora e idioma → Voz.
 - **No lee voz ni subtítulos de vídeo con efectos.** Solo texto visible y estático o que se va escribiendo.
 - **El cambio automático de perfil reconoce el juego por su `.exe`.** Si dos juegos usan el mismo ejecutable (por ejemplo, juegos de navegador o emuladores), comparten perfil, así que cambia entre ellos a mano con `Ctrl+Shift+O`.
 - **Cada zona consume algo de CPU.** Con 2 o 3 zonas no se nota; con muchas, sube el intervalo en Ajustes.
@@ -178,10 +187,9 @@ py -3.12 -m venv .venv
 
 ## Ideas para el futuro
 
-- Leer la traducción en voz alta (texto a voz).
 - Opciones de visualización distintas para cada perfil.
 - Más servicios de traducción (DeepL con clave propia, LibreTranslate, modelos locales).
-- Editar a mano las traducciones guardadas.
+- Exportar e importar perfiles y glosarios para compartirlos.
 
 ## Licencia: libre para usar, prohibido venderla
 

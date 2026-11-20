@@ -2,6 +2,14 @@
 
 Este proyecto usa [versionado semántico](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.5.0] - 2026-11-20
+
+- **Alt + clic** en una traducción en pantalla la copia al portapapeles y muestra "✓ Copiado". **Alt + clic derecho** permite corregirla. Mientras se mantiene Alt, las traducciones muestran un borde ámbar y se pueden pulsar.
+- **Correcciones manuales**: desde la propia traducción o desde el Historial (botón "Corregir…" o doble clic). Se guardan en la memoria, tienen prioridad sobre todo lo demás y se aplican al momento en pantalla.
+- **Glosario por perfil**: términos con traducción fija o que no se traducen, gestionados desde la página Perfiles. Se aplican sin borrar la memoria de traducciones y, al cambiarlos, se vuelve a traducir lo que haya en pantalla.
+- **Lectura en voz alta** con las voces de Windows (SAPI), gratis y sin internet: lee cada traducción nueva o solo la última con `Ctrl+Shift+L`, con selección de voz y velocidad y botón "Probar voz". También hay botones para leer en Inicio y en el Historial.
+- Las páginas de la ventana se desplazan si no caben, y los botones ya no cortan su texto.
+
 ## [1.4.0] - 2026-11-20
 
 - **Ventana principal** con barra lateral:

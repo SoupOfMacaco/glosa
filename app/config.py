@@ -65,9 +65,15 @@ class Config:
     first_run: bool = True
     # Perfiles: cada uno con una o varias zonas y, opcionalmente, el juego (.exe) al que pertenece
     #   {"name": "Chained Echoes", "regions": [[x, y, w, h], ...], "game": "chainedechoes.exe"}
+    #   Cada perfil puede tener además "glossary": {"término": "traducción fija" o "" para no traducirlo}
     profiles: list = field(default_factory=list)
     active_profile: str = ""
     auto_profile: bool = True       # cambiar de perfil solo al cambiar de juego
+    # Lectura en voz alta
+    tts_auto: bool = False          # leer cada traducción nueva
+    tts_voice: str = ""             # nombre de la voz de Windows ("" = la primera en español)
+    tts_rate: int = 0               # -10 (lenta) .. 10 (rápida)
+    tts_volume: int = 100
 
     @classmethod
     def path(cls):
@@ -110,6 +116,7 @@ class Config:
             self.active_profile = p["name"]
         p.setdefault("regions", [])
         p.setdefault("game", "")
+        p.setdefault("glossary", {})
         return p
 
     def profile_for_game(self, exe: str) -> dict | None:

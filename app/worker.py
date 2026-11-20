@@ -28,11 +28,12 @@ class LiveWorker(QThread):
     ocr_ready = Signal(str)                         # idioma del OCR en uso
     failed = Signal(str)
 
-    def __init__(self, config, translator: Translator, region, index: int = 0):
+    def __init__(self, config, translator: Translator, region, index: int = 0, glossary=None):
         super().__init__()
         self.config = config
         self.translator = translator
         self.index = index
+        self._glossary = glossary or (lambda: {})  # función que devuelve el glosario del perfil
         self._stop = threading.Event()
         self._paused = False
         self._region = list(region) if region else None
@@ -171,7 +172,7 @@ class LiveWorker(QThread):
     def _submit(self, text: str):
         self._seq += 1
         seq = self._seq
-        future = self.translator.translate_async(text)
+        future = self.translator.translate_async(text, self._glossary())
 
         def done(f):
             if seq != self._seq:

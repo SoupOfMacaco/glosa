@@ -10,6 +10,10 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
     QCheckBox,
     QComboBox,
     QFrame,
@@ -23,6 +27,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSlider,
     QStackedWidget,
     QVBoxLayout,
@@ -104,6 +109,7 @@ def _button(text, slot, name=None) -> QPushButton:
         b.setObjectName(name)
     b.setCursor(Qt.PointingHandCursor)
     b.clicked.connect(slot)
+    b.setMinimumWidth(b.fontMetrics().horizontalAdvance(text) + 40)  # que el relleno del estilo no corte el texto
     return b
 
 
@@ -128,8 +134,8 @@ class MainWindow(QMainWindow):
         self._told_background = False
         self.setWindowTitle(f"{APP_NAME} · {APP_TAGLINE}")
         self.setWindowIcon(QIcon(str(resource_path("assets", "icon.ico"))))
-        self.resize(940, 640)
-        self.setMinimumSize(820, 560)
+        self.resize(980, 720)
+        self.setMinimumSize(880, 640)
         self.setStyleSheet(STYLE)
 
         root = QWidget()
@@ -165,15 +171,23 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
         h.addWidget(self.stack, 1)
-        self.stack.addWidget(self._build_home())
-        self.stack.addWidget(self._build_profiles())
-        self.stack.addWidget(self._build_history())
-        self.stack.addWidget(self._build_settings())
-        self.stack.addWidget(self._build_about())
+        for build in (self._build_home, self._build_profiles, self._build_history, self._build_settings, self._build_about):
+            self.stack.addWidget(self._scrollable(build()))
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.nav.currentRowChanged.connect(lambda _: self.refresh())
         self.nav.setCurrentRow(0)
         self.setCentralWidget(root)
+
+    @staticmethod
+    def _scrollable(page: QWidget) -> QScrollArea:
+        """Si la ventana es pequeña, la página se desplaza en vez de aplastarse."""
+        area = QScrollArea()
+        area.setWidget(page)
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.NoFrame)
+        area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        area.setStyleSheet("QScrollArea { background: #15161f; border: none; }")
+        return area
 
     # ================= Inicio =================
     def _build_home(self):
@@ -191,8 +205,9 @@ class MainWindow(QMainWindow):
         self.btn_pause = _button("Pausar", self.c.toggle_pause)
         self.btn_hide = _button("Ocultar traducción", self.c.toggle_hidden)
         self.btn_switch = _button("Cambiar de perfil…", lambda: self.nav.setCurrentRow(1))
+        self.btn_speak = _button("🔊  Leer última", self.c.speak_last)
         row = QHBoxLayout()
-        for b in (self.btn_zones, self.btn_pause, self.btn_hide, self.btn_switch):
+        for b in (self.btn_zones, self.btn_pause, self.btn_hide, self.btn_speak, self.btn_switch):
             row.addWidget(b)
         row.addStretch()
         lay.addWidget(_card(top, self.home_detail, row))
@@ -214,13 +229,20 @@ class MainWindow(QMainWindow):
         grid.addLayout(bg_row, 1, 1)
         grid.addWidget(_label("Opacidad del texto"), 2, 0)
         grid.addLayout(txt_row, 2, 1)
+        self.chk_tts_home = QCheckBox("Leer en voz alta cada traducción nueva")
+        self.chk_tts_home.toggled.connect(lambda on: None if self._refreshing else self.c.set_tts(auto=on))
+        grid.addWidget(self.chk_tts_home, 3, 0, 1, 2)
         grid.setColumnStretch(1, 1)
         lay.addWidget(_card(_label("Apariencia rápida", "h2"), grid))
 
         # Última traducción
         self.home_last = _label("Todavía no hay traducciones en esta sesión.", "muted", wrap=True)
         self.home_last.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        lay.addWidget(_card(_label("Última traducción", "h2"), self.home_last))
+        lay.addWidget(_card(
+            _label("Última traducción", "h2"), self.home_last,
+            _label("Consejo: mantén <b>Alt</b> y haz clic en una traducción en pantalla para copiarla, "
+                   "o <b>Alt + clic derecho</b> para corregirla.", "muted", wrap=True),
+        ))
         lay.addStretch()
         return page
 
@@ -292,22 +314,34 @@ class MainWindow(QMainWindow):
         self.det_game = QComboBox()
         self.det_game.setEditable(True)
         self.det_game.setInsertPolicy(QComboBox.NoInsert)
-        self.det_game.setMinimumWidth(260)
         self.det_game.lineEdit().setPlaceholderText("ningún programa (no se activa solo)")
-        game_row = QHBoxLayout()
-        game_row.addWidget(self.det_game, 1)
-        game_row.addWidget(_button("Programas abiertos…", self._fill_running_programs))
-        game_row.addWidget(_button("Vincular", self._link_selected))
-        game_row.addWidget(_button("Desvincular", self._unlink_selected))
+        game_row = QVBoxLayout()
+        game_row.addWidget(self.det_game)
+        game_btns = QHBoxLayout()
+        game_btns.addWidget(_button("Elegir de los programas abiertos…", self._fill_running_programs))
+        game_btns.addWidget(_button("Vincular", self._link_selected))
+        game_btns.addWidget(_button("Desvincular", self._unlink_selected))
+        game_btns.addStretch()
+        game_row.addLayout(game_btns)
 
         self.det_zones = QListWidget()
         self.det_zones.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.det_zones.setWordWrap(True)
-        self.det_zones.setMinimumHeight(120)
+        self.det_zones.setMinimumHeight(70)
         zrow = QHBoxLayout()
         zrow.addWidget(_button("✏️  Editar zonas en pantalla", self._edit_selected_zones, "primary"))
         zrow.addWidget(_button("Quitar zona seleccionada", self._remove_selected_zone))
         zrow.addStretch()
+
+        self.det_glossary = QListWidget()
+        self.det_glossary.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.det_glossary.setMinimumHeight(70)
+        self.det_glossary.itemDoubleClicked.connect(lambda _: self._edit_glossary_term())
+        grow = QHBoxLayout()
+        grow.addWidget(_button("＋ Añadir término", self._add_glossary_term))
+        grow.addWidget(_button("Editar", self._edit_glossary_term))
+        grow.addWidget(_button("Quitar", self._remove_glossary_term))
+        grow.addStretch()
 
         arow = QHBoxLayout()
         self.btn_activate = _button("✔  Activar este perfil", self._activate_selected)
@@ -320,6 +354,8 @@ class MainWindow(QMainWindow):
             _label("Nombre", "muted"), name_row,
             _label("Programa o juego vinculado", "muted"), game_row,
             _label("Zonas de pantalla", "muted"), self.det_zones, zrow,
+            _label("Glosario del perfil: nombres y términos que se traducen siempre igual (o no se traducen)", "muted", wrap=True),
+            self.det_glossary, grow,
             arow,
             spacing=8,
         )
@@ -341,7 +377,7 @@ class MainWindow(QMainWindow):
     def _fill_profile_detail(self):
         p = self._selected_profile()
         enabled = p is not None
-        for w in (self.det_name, self.det_game, self.det_zones, self.btn_activate, self.btn_delete):
+        for w in (self.det_name, self.det_game, self.det_zones, self.det_glossary, self.btn_activate, self.btn_delete):
             w.setEnabled(enabled)
         if not p:
             return
@@ -361,6 +397,17 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem("Sin zonas: pulsa «Editar zonas en pantalla» para marcarlas")
             item.setFlags(Qt.NoItemFlags)
             self.det_zones.addItem(item)
+        self.det_glossary.clear()
+        glossary = p.get("glossary", {})
+        for term in sorted(glossary, key=str.lower):
+            target = glossary[term].strip() or "(no traducir)"
+            item = QListWidgetItem(f"{term}   →   {target}")
+            item.setData(Qt.UserRole, term)
+            self.det_glossary.addItem(item)
+        if not glossary:
+            item = QListWidgetItem("Vacío. Ejemplo: «Mercenary → Mercenario» o «Kylian → (no traducir)»")
+            item.setFlags(Qt.NoItemFlags)
+            self.det_glossary.addItem(item)
 
     def _fill_running_programs(self):
         current = self.det_game.currentText()
@@ -428,6 +475,62 @@ class MainWindow(QMainWindow):
             self.c.remove_profile_zone(p["name"], row)
             self.refresh()
 
+    def _glossary_dialog(self, term: str = "", target: str = "") -> tuple[str, str] | None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Término del glosario")
+        dlg.setStyleSheet(STYLE)
+        form = QFormLayout(dlg)
+        e_term = QLineEdit(term)
+        e_term.setPlaceholderText("Ej.: Mercenary, Kylian, Sky Armor")
+        e_target = QLineEdit(target)
+        e_target.setPlaceholderText("Vacío = no traducirlo (se deja tal cual)")
+        form.addRow("Término original:", e_term)
+        form.addRow("Traducción fija:", e_target)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Guardar")
+        bb.button(QDialogButtonBox.Cancel).setText("Cancelar")
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        dlg.resize(460, 140)
+        if dlg.exec() and e_term.text().strip():
+            return e_term.text().strip(), e_target.text().strip()
+        return None
+
+    def _add_glossary_term(self):
+        p = self._selected_profile()
+        if not p:
+            return
+        res = self._glossary_dialog()
+        if res:
+            g = dict(p.get("glossary", {}))
+            g[res[0]] = res[1]
+            self.c.set_profile_glossary(p["name"], g)
+            self._fill_profile_detail()
+
+    def _edit_glossary_term(self):
+        p = self._selected_profile()
+        item = self.det_glossary.currentItem()
+        if not p or not item or not item.data(Qt.UserRole):
+            return
+        term = item.data(Qt.UserRole)
+        g = dict(p.get("glossary", {}))
+        res = self._glossary_dialog(term, g.get(term, ""))
+        if res:
+            g.pop(term, None)
+            g[res[0]] = res[1]
+            self.c.set_profile_glossary(p["name"], g)
+            self._fill_profile_detail()
+
+    def _remove_glossary_term(self):
+        p = self._selected_profile()
+        item = self.det_glossary.currentItem()
+        if p and item and item.data(Qt.UserRole):
+            g = dict(p.get("glossary", {}))
+            g.pop(item.data(Qt.UserRole), None)
+            self.c.set_profile_glossary(p["name"], g)
+            self._fill_profile_detail()
+
     def _activate_selected(self):
         p = self._selected_profile()
         if p and p["name"] != self.c.cfg.active_profile:
@@ -454,31 +557,56 @@ class MainWindow(QMainWindow):
         head = QHBoxLayout()
         head.addWidget(_label("Historial", "h1"))
         head.addStretch()
-        head.addWidget(_button("Copiar seleccionado", self._copy_history))
+        head.addWidget(_button("Copiar", self._copy_history))
+        head.addWidget(_button("🔊  Leer", self._speak_history))
+        head.addWidget(_button("✏️  Corregir…", self._correct_history, "primary"))
         head.addWidget(_button("Vaciar", lambda: self.history.clear()))
         lay.addLayout(head)
-        lay.addWidget(_label("Las últimas traducciones de esta sesión (las más recientes arriba).", "muted"))
+        lay.addWidget(_label("Las últimas traducciones de esta sesión (las más recientes arriba). Si una traducción "
+                             "es mala, selecciónala y pulsa «Corregir»: se guardará y se usará siempre.", "muted", wrap=True))
         self.history = QListWidget()
         self.history.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.history.setWordWrap(True)
         self.history.setSpacing(2)
+        self.history.itemDoubleClicked.connect(lambda _: self._correct_history())
         lay.addWidget(self.history, 1)
         return page
 
     def add_history(self, zone: int, original: str, translation: str, source: str):
         stamp = time.strftime("%H:%M:%S")
         item = QListWidgetItem(f"{translation}\n{original}\n{stamp} · Zona {zone + 1} · {source}")
-        item.setData(Qt.UserRole, translation)
+        item.setData(Qt.UserRole, (original, translation, stamp, zone, source))
         self.history.insertItem(0, item)
         while self.history.count() > 200:
             self.history.takeItem(self.history.count() - 1)
         self.home_last.setText(f"<b>{translation}</b><br><span style='color:#9a9bb3'>{original}</span>")
 
-    def _copy_history(self):
+    def _history_entry(self):
         item = self.history.currentItem()
-        if item:
-            from PySide6.QtWidgets import QApplication
-            QApplication.clipboard().setText(item.data(Qt.UserRole))
+        return item.data(Qt.UserRole) if item else None
+
+    def _copy_history(self):
+        entry = self._history_entry()
+        if entry:
+            QApplication.clipboard().setText(entry[1])
+
+    def _speak_history(self):
+        entry = self._history_entry()
+        if entry:
+            self.c.speak_text(entry[1])
+
+    def _correct_history(self):
+        entry = self._history_entry()
+        if entry:
+            self.c.correct_translation(entry[0], entry[1])
+
+    def update_history_translation(self, original: str, translation: str):
+        for i in range(self.history.count()):
+            item = self.history.item(i)
+            o, _t, stamp, zone, _source = item.data(Qt.UserRole)
+            if o == original:
+                item.setData(Qt.UserRole, (o, translation, stamp, zone, "corregida"))
+                item.setText(f"{translation}\n{o}\n{stamp} · Zona {zone + 1} · corregida")
 
     # ================= Ajustes =================
     def _build_settings(self):
@@ -495,8 +623,37 @@ class MainWindow(QMainWindow):
                    "y memoria de traducciones.", "muted", wrap=True),
             _button("Abrir todos los ajustes…", self.c.open_settings, "primary"),
         ))
+        self.chk_tts = QCheckBox("Leer en voz alta cada traducción nueva")
+        self.chk_tts.toggled.connect(lambda on: None if self._refreshing else self.c.set_tts(auto=on))
+        self.cmb_voice = QComboBox()
+        self.cmb_voice.setMinimumHeight(32)
+        self.cmb_voice.currentIndexChanged.connect(
+            lambda _: None if self._refreshing else self.c.set_tts(voice=self.cmb_voice.currentText()))
+        self.sl_rate = QSlider(Qt.Horizontal)
+        self.sl_rate.setRange(-5, 5)
+        self.sl_rate.valueChanged.connect(lambda v: None if self._refreshing else self.c.set_tts(rate=v))
+        vgrid = QGridLayout()
+        vgrid.addWidget(_label("Voz de Windows"), 0, 0)
+        vgrid.addWidget(self.cmb_voice, 0, 1)
+        vgrid.addWidget(_label("Velocidad"), 1, 0)
+        rate_row = QHBoxLayout()
+        rate_row.addWidget(_label("lenta", "muted"))
+        rate_row.addWidget(self.sl_rate)
+        rate_row.addWidget(_label("rápida", "muted"))
+        vgrid.addLayout(rate_row, 1, 1)
+        vgrid.setColumnStretch(1, 1)
+        test_row = QHBoxLayout()
+        test_row.addWidget(_button("▶  Probar voz", lambda: self.c.speak_text("Hola, así sonarán las traducciones.")))
+        test_row.addStretch()
+        lay.addWidget(_card(
+            _label("Lectura en voz alta", "h2"),
+            _label("Usa las voces que trae Windows: gratis y sin internet. Con Ctrl+Shift+L se lee la última traducción.",
+                   "muted", wrap=True),
+            self.chk_tts, vgrid, test_row,
+        ))
         keys = "<br>".join(f"<b>{v[2]}</b> &nbsp; {v[3]}" for v in HOTKEYS.values())
-        lay.addWidget(_card(_label("Atajos de teclado (funcionan con el juego o programa en primer plano)", "h2"), _label(keys)))
+        keys += "<br><b>Alt + clic</b> &nbsp; Copiar una traducción en pantalla<br><b>Alt + clic derecho</b> &nbsp; Corregirla"
+        lay.addWidget(_card(_label("Atajos (funcionan con el juego o programa en primer plano)", "h2"), _label(keys)))
         lay.addStretch()
         return page
 
@@ -580,6 +737,16 @@ class MainWindow(QMainWindow):
                 if prof["name"] == selected_name:
                     row_to_select = i
             self.prof_list.setCurrentRow(row_to_select)
+
+            # Voz
+            self.chk_tts_home.setChecked(cfg.tts_auto)
+            self.chk_tts.setChecked(cfg.tts_auto)
+            if self.cmb_voice.count() == 0:
+                voices = c.speaker.voices()
+                self.cmb_voice.addItems(voices or ["(no hay voces de Windows disponibles)"])
+            idx = self.cmb_voice.findText(cfg.tts_voice)
+            self.cmb_voice.setCurrentIndex(idx if idx >= 0 else 0)
+            self.sl_rate.setValue(cfg.tts_rate)
 
             # Ajustes y estado
             self.chk_autostart.setChecked(cfg.autostart)

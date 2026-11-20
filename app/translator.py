@@ -24,6 +24,40 @@ SOURCE_MEMORY = "memoria"
 SOURCE_GLOSSARY = "glosario"
 SOURCE_OFFLINE = "sin conexión"
 SOURCE_SAME = "mismo idioma"
+SOURCE_MANUAL = "corregida"
+SOURCE_PROFILE_GLOSSARY = "glosario del perfil"
+
+PLACEHOLDER = "ZQ{}X"            # los traductores dejan intacto este tipo de palabra inventada
+PLACEHOLDER_RE = re.compile(r"ZQ(\d+)X", re.IGNORECASE)
+
+
+def _glossary_terms(text: str, glossary: dict) -> list[tuple[str, str]]:
+    """Términos del glosario que aparecen en el texto (los más largos primero)."""
+    found = []
+    for term in sorted(glossary, key=len, reverse=True):
+        if term.strip() and re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, re.IGNORECASE):
+            found.append((term, glossary[term]))
+    return found
+
+
+def protect_terms(text: str, terms: list[tuple[str, str]]) -> tuple[str, list[str]]:
+    """Sustituye cada término por un marcador. Devuelve el texto protegido y, por marcador, el texto final."""
+    finals = []
+    for term, replacement in terms:
+        idx = len(finals)
+
+        def repl(m, idx=idx):
+            return PLACEHOLDER.format(idx)
+
+        new_text = re.sub(rf"(?<!\w){re.escape(term)}(?!\w)", repl, text, flags=re.IGNORECASE)
+        if new_text != text:
+            text = new_text
+            finals.append(replacement.strip() or term)  # vacío = no traducir (se deja el término original)
+    return text, finals
+
+
+def restore_terms(text: str, finals: list[str]) -> str:
+    return PLACEHOLDER_RE.sub(lambda m: finals[int(m.group(1))] if int(m.group(1)) < len(finals) else m.group(0), text)
 
 
 def normalize(text: str) -> str:
@@ -70,20 +104,23 @@ class Translator:
         self.source_lang, self.target_lang = source_lang, target_lang
         self._glossary = self._load_glossary()
 
-    def lookup(self, text: str) -> TranslationResult | None:
+    def lookup(self, text: str, manual_only: bool = False) -> TranslationResult | None:
         key = normalize(text)
         with self._lock:
             row = self._db.execute(
                 "SELECT traduccion, fuente FROM traducciones WHERE src_lang=? AND dst_lang=? AND clave=?",
                 (self.source_lang, self.target_lang, key),
             ).fetchone()
-            if row:
+            if row and (not manual_only or row[1] == SOURCE_MANUAL):
                 self._db.execute(
                     "UPDATE traducciones SET usos=usos+1 WHERE src_lang=? AND dst_lang=? AND clave=?",
                     (self.source_lang, self.target_lang, key),
                 )
                 self._db.commit()
-                return TranslationResult(text, row[0], SOURCE_SAME if row[1] == SOURCE_SAME else SOURCE_MEMORY)
+                source = {SOURCE_SAME: SOURCE_SAME, SOURCE_MANUAL: SOURCE_MANUAL}.get(row[1], SOURCE_MEMORY)
+                return TranslationResult(text, row[0], source)
+        if manual_only:
+            return None
         if key in self._glossary:
             return TranslationResult(text, self._glossary[key], SOURCE_GLOSSARY)
         stripped = key.rstrip(".!?")
@@ -92,6 +129,8 @@ class Translator:
         return None
 
     def _store(self, original: str, translated: str, source: str) -> None:
+        if self._closed:
+            return  # la app se está cerrando: una traducción que llegue tarde no se guarda
         with self._lock:
             self._db.execute(
                 "INSERT OR REPLACE INTO traducciones (src_lang, dst_lang, clave, original, traduccion, fuente, usos, creado)"
@@ -99,6 +138,10 @@ class Translator:
                 (self.source_lang, self.target_lang, normalize(original), original, translated, source, time.time()),
             )
             self._db.commit()
+
+    def set_correction(self, original: str, translated: str) -> None:
+        """Guarda una traducción corregida a mano: tiene prioridad sobre todo lo demás y no se sobrescribe."""
+        self._store(original, translated, SOURCE_MANUAL)
 
     def memory_size(self) -> int:
         with self._lock:
@@ -162,16 +205,50 @@ class Translator:
                 log.warning("Fallo al traducir con %s: %s", name, e)
         return TranslationResult(text, text, SOURCE_OFFLINE, ok=False)
 
-    def translate_async(self, text: str) -> Future:
-        """Devuelve un Future con un TranslationResult. Primero mira la memoria y el glosario."""
+    @staticmethod
+    def _done(result: TranslationResult) -> Future:
+        f: Future = Future()
+        f.set_result(result)
+        return f
+
+    def translate_async(self, text: str, glossary: dict | None = None) -> Future:
+        """Devuelve un Future con un TranslationResult.
+
+        Orden: corrección manual > glosario del perfil > memoria > glosario incluido > internet.
+        """
+        manual = self.lookup(text, manual_only=True)
+        if manual:
+            return self._done(manual)
+        glossary = {k: v for k, v in (glossary or {}).items() if k.strip()}
+        if glossary:
+            for term, replacement in glossary.items():
+                if normalize(term) == normalize(text).rstrip(".!?"):
+                    return self._done(TranslationResult(text, replacement.strip() or text, SOURCE_PROFILE_GLOSSARY))
+            terms = _glossary_terms(text, glossary)
+            if terms:
+                protected, finals = protect_terms(text, terms)
+                return self._pool.submit(self._translate_protected, text, protected, finals)
         hit = self.lookup(text)
         if hit:
-            f: Future = Future()
-            f.set_result(hit)
-            return f
+            return self._done(hit)
         return self._pool.submit(self.translate_online, text)
 
+    def _translate_protected(self, original: str, protected: str, finals: list[str]) -> TranslationResult:
+        """Traduce con los términos del glosario sustituidos por marcadores y luego los repone."""
+        res = self.lookup(protected) or self.translate_online(protected)
+        if not res.ok:
+            return TranslationResult(original, restore_terms(protected, finals), res.source, ok=False)
+        if res.same_language:
+            return TranslationResult(original, original, res.source)
+        missing = len(set(PLACEHOLDER_RE.findall(res.text))) < len(finals)
+        if missing:
+            log.warning("El traductor alteró algún término del glosario: %r", res.text)
+        return TranslationResult(original, restore_terms(res.text, finals), f"{res.source} + glosario")
+
+    _closed = False
+
     def close(self) -> None:
+        self._closed = True
         self._pool.shutdown(wait=False, cancel_futures=True)
         with self._lock:
             self._db.close()

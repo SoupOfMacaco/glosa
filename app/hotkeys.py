@@ -18,6 +18,7 @@ HOTKEYS = {
     3: (MOD_CONTROL | MOD_SHIFT, ord("M"), "Ctrl+Shift+M", "Cambiar modo de visualización"),
     4: (MOD_CONTROL | MOD_SHIFT, ord("H"), "Ctrl+Shift+H", "Ocultar / mostrar traducción"),
     5: (MOD_CONTROL | MOD_SHIFT, ord("O"), "Ctrl+Shift+O", "Cambiar al siguiente perfil"),
+    6: (MOD_CONTROL | MOD_SHIFT, ord("L"), "Ctrl+Shift+L", "Leer en voz alta la última traducción"),
 }
 
 

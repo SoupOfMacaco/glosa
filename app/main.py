@@ -17,6 +17,7 @@ from .overlay import CornerOverlay, FloatingOverlay, physical_to_logical
 from .paths import data_dir, resource_path
 from .selector import RegionSelector
 from .settings_dialog import SettingsDialog
+from .speech import Speaker
 from .translator import Translator
 from .updater import Updater
 from .worker import LiveWorker
@@ -54,6 +55,11 @@ class Controller(QObject):
         self.floats: list[FloatingOverlay] = []
         self.zone_has_text: dict[int, bool] = {}
         self.corner = CornerOverlay()
+        self.corner.copy_requested.connect(self.copy_translation)
+        self.corner.correct_requested.connect(self.correct_translation)
+        self.speaker = Speaker()
+        self.last_translation = ("", "")   # (original, traducción)
+        self._alt_down = False
 
         # Último juego (ventana externa) que estuvo en primer plano
         self.fg_exe, self.fg_title = "", ""
@@ -91,6 +97,11 @@ class Controller(QObject):
         self.fg_timer = QTimer(self)
         self.fg_timer.timeout.connect(self.watch_foreground)
         self.fg_timer.start(1500)
+
+        # Mientras se mantiene Alt, las traducciones se pueden pulsar (copiar / corregir)
+        self.alt_timer = QTimer(self)
+        self.alt_timer.timeout.connect(self.watch_alt)
+        self.alt_timer.start(80)
 
         if self.cfg.check_updates:
             QTimer.singleShot(4000, self.updater.check)
@@ -189,6 +200,79 @@ class Controller(QObject):
             sock.readAll()
             sock.disconnectFromServer()
         self.show_window()
+
+    # ---------- copiar, corregir y leer en voz alta ----------
+    def watch_alt(self):
+        down = winutil.alt_pressed()
+        overlays = [self.corner, *self.floats]
+        if down != self._alt_down:
+            self._alt_down = down
+            for o in overlays:
+                o.set_interactive(down)
+        elif down:
+            for o in overlays:  # por si alguna se mostró mientras Alt seguía pulsado
+                if o.isVisible():
+                    winutil.set_click_through(int(o.winId()), False)
+
+    def copy_translation(self, original: str, translation: str):
+        QApplication.clipboard().setText(translation)
+        log.info("Copiada al portapapeles: %r", translation)
+
+    def correct_translation(self, original: str, current: str):
+        """Permite corregir una traducción; la corrección se guarda en la memoria y se usa siempre."""
+        if not original:
+            return
+        parent = self.window if self.window and self.window.isVisible() else None
+        text, ok = QInputDialog.getMultiLineText(
+            parent, f"{APP_NAME}: corregir traducción",
+            f"Texto original:\n{original}\n\nTraducción correcta (se guardará y se usará siempre):", current,
+        )
+        text = text.strip()
+        if not ok or not text or text == current:
+            return
+        self.translator.set_correction(original, text)
+        log.info("Corrección guardada: %r -> %r", original, text)
+        # Actualizar lo que esté en pantalla con ese texto
+        for i, f in enumerate(self.floats):
+            if f.original == original:
+                f.set_text(text, original=original)
+        for idx, entry in list(self.corner.entries.items()):
+            if entry[0] == original:
+                self.corner.set_entry(idx, original, text, "corregida")
+        if self.last_translation[0] == original:
+            self.last_translation = (original, text)
+        if self.window:
+            self.window.update_history_translation(original, text)
+        self.notify("Traducción corregida", "Se usará siempre que aparezca ese texto.")
+
+    def speak_text(self, text: str):
+        self.speaker.speak(text, self.cfg.tts_voice, self.cfg.tts_rate, self.cfg.tts_volume)
+
+    def speak_last(self):
+        if self.last_translation[1]:
+            self.speak_text(self.last_translation[1])
+        else:
+            self.notify(APP_NAME, "Todavía no hay ninguna traducción que leer.")
+
+    def set_tts(self, auto: bool | None = None, voice: str | None = None, rate: int | None = None):
+        if auto is not None:
+            self.cfg.tts_auto = auto
+            if not auto:
+                self.speaker.stop()
+        if voice is not None:
+            self.cfg.tts_voice = voice
+        if rate is not None:
+            self.cfg.tts_rate = rate
+        self.cfg.save()
+
+    def set_profile_glossary(self, name: str, glossary: dict):
+        p = self.cfg.get_profile(name)
+        if p is not None:
+            p["glossary"] = dict(glossary)
+            self.cfg.save()
+            if name == self.cfg.active_profile:
+                for w in self.workers:
+                    w.force_refresh()  # vuelve a traducir lo que haya en pantalla con el glosario nuevo
 
     def refresh_window(self):
         if self.window:
@@ -322,8 +406,9 @@ class Controller(QObject):
         self.floats = []
         self.zone_has_text = {}
         self.corner.clear_all()
+        profile = self.profile
         for i, region in enumerate(self.regions):
-            w = LiveWorker(self.cfg, self.translator, region, i)
+            w = LiveWorker(self.cfg, self.translator, region, i, glossary=lambda p=profile: dict(p.get("glossary", {})))
             w.translated.connect(self.on_translated)
             w.cleared.connect(self.on_cleared)
             w.ocr_ready.connect(self.on_ocr_ready)
@@ -331,7 +416,10 @@ class Controller(QObject):
             w.set_paused(self.paused)
             w.start()
             self.workers.append(w)
-            self.floats.append(FloatingOverlay())
+            f = FloatingOverlay()
+            f.copy_requested.connect(self.copy_translation)
+            f.correct_requested.connect(self.correct_translation)
+            self.floats.append(f)
         self.refresh_overlays()
         self.update_tooltip()
 
@@ -350,7 +438,10 @@ class Controller(QObject):
         if self.window:
             self.window.add_history(index, original, translation, source)
         self.zone_has_text[index] = True
-        self.floats[index].set_text(translation, offline=not ok)
+        self.last_translation = (original, translation)
+        if ok and self.cfg.tts_auto:
+            self.speak_text(translation)
+        self.floats[index].set_text(translation, offline=not ok, original=original)
         self.corner.set_entry(index, original, translation, source, offline=not ok)
         self.refresh_overlays()
 
@@ -553,6 +644,7 @@ class Controller(QObject):
             3: self.cycle_mode,
             4: self.toggle_hidden,
             5: self.cycle_profile,
+            6: self.speak_last,
         }
         actions[hid]()
 
@@ -669,6 +761,7 @@ class Controller(QObject):
 
     def quit(self):
         self.hotkeys.unregister_all()
+        self.speaker.stop()
         for w in self.workers:
             w.stop()
         self.translator.close()
@@ -689,6 +782,10 @@ def _ask_running_instance_to_show() -> None:
 
 def main():
     setup_logging()
+    if os.environ.get("GLOSA_VOICE_CHECK") == "1":
+        # Diagnóstico: comprueba las voces de Windows y sale (útil para soporte)
+        log.info("Voces disponibles: %s", Speaker().voices())
+        return 0
     minimized = "--minimized" in sys.argv
     if not winutil.acquire_single_instance(f"{APP_ID}Mutex"):
         # Ya está abierta en segundo plano: le pedimos que muestre su ventana

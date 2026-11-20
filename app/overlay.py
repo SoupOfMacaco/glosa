@@ -1,5 +1,10 @@
-"""Ventanas flotantes con la traducción (siempre encima y sin capturar el ratón)."""
-from PySide6.QtCore import QPoint, QRect, Qt
+"""Ventanas flotantes con la traducción (siempre encima y sin capturar el ratón).
+
+Manteniendo Alt pulsado se vuelven clicables: Alt+clic copia la traducción y Alt+clic derecho permite corregirla.
+"""
+import time
+
+from PySide6.QtCore import QPoint, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath
 from PySide6.QtWidgets import QWidget
 
@@ -34,6 +39,9 @@ def physical_to_logical(region) -> QRect:
 class _Bubble(QWidget):
     """Base: ventana transparente, sin bordes, encima de todo y que deja pasar los clics."""
 
+    copy_requested = Signal(str, str)      # original, traducción
+    correct_requested = Signal(str, str)   # original, traducción
+
     def __init__(self):
         super().__init__(None)
         self.setWindowFlags(
@@ -52,11 +60,51 @@ class _Bubble(QWidget):
         self.opacity = 88        # opacidad del fondo, 0-100 %
         self.text_opacity = 100  # opacidad del texto, 20-100 %
         self._excluded = False
+        self.interactive = False
+        self._flash_until = 0.0
 
     def showEvent(self, e):
         super().showEvent(e)
         if not self._excluded:
             self._excluded = winutil.exclude_from_capture(int(self.winId()))
+
+    def set_interactive(self, on: bool):
+        """Mientras se mantiene Alt, la ventana deja de ser "atravesable" para poder hacer clic en ella."""
+        if on == self.interactive:
+            return
+        self.interactive = on
+        if self.isVisible():
+            winutil.set_click_through(int(self.winId()), not on)
+        self.update()
+
+    def entry_at(self, pos) -> tuple[str, str] | None:
+        return (self.original, self.translation) if self.translation else None
+
+    def mousePressEvent(self, e):
+        entry = self.entry_at(e.position().toPoint())
+        if not entry:
+            return
+        if e.button() == Qt.LeftButton:
+            self.copy_requested.emit(*entry)
+            self._flash_until = time.monotonic() + 1.2
+            self.update()
+            QTimer.singleShot(1300, self.update)
+        elif e.button() == Qt.RightButton:
+            self.correct_requested.emit(*entry)
+
+    def _paint_overlay_state(self, p: QPainter):
+        """Borde ámbar mientras se puede hacer clic y aviso de "copiado"."""
+        if self.interactive:
+            pen = p.pen()
+            p.setPen(QColor(255, 182, 39, 230))
+            p.drawRoundedRect(self.rect().adjusted(1, 1, -2, -2), 8, 8)
+            p.setPen(pen)
+        if time.monotonic() < self._flash_until:
+            p.setFont(self._font(12, True))
+            r = QRect(self.width() - 110, 4, 104, 22)
+            p.fillRect(r, QColor(31, 95, 58, 235))
+            p.setPen(QColor(184, 245, 207))
+            p.drawText(r, Qt.AlignCenter, "✓ Copiado")
 
     def apply_style(self, font_size: int, opacity: int, text_opacity: int = 100):
         self.font_size = font_size
@@ -110,8 +158,8 @@ class FloatingOverlay(_Bubble):
         self.position = position
         self._relayout()
 
-    def set_text(self, translation: str, offline: bool = False):
-        self.translation, self.offline = translation, offline
+    def set_text(self, translation: str, offline: bool = False, original: str = ""):
+        self.translation, self.offline, self.original = translation, offline, original
         self._relayout()
         self.update()
 
@@ -151,6 +199,7 @@ class FloatingOverlay(_Bubble):
         rect = self.rect().adjusted(PAD, PAD, -PAD, -PAD)
         align = Qt.AlignVCenter | Qt.AlignLeft | Qt.TextWordWrap
         self._draw_text(p, rect, align, self.translation)
+        self._paint_overlay_state(p)
 
 
 class CornerOverlay(_Bubble):
@@ -163,6 +212,7 @@ class CornerOverlay(_Bubble):
         self.entries = {}       # índice de zona -> (original, traducción, fuente, sin_conexión)
         self.zone_count = 1
         self._screen = None
+        self._block_rects = []  # (rect, índice de zona)
 
     def configure(self, corner: str, show_original: bool, region_rect: QRect | None, zone_count: int = 1):
         self.corner, self.show_original, self.zone_count = corner, show_original, max(1, zone_count)
@@ -225,11 +275,13 @@ class CornerOverlay(_Bubble):
         width = self.width()
         y = PAD
         blocks = self._blocks(width)
+        self._block_rects = []
         for n, (idx, (original, translation, source, offline), t_h, o_h, footer) in enumerate(blocks):
             if n:
                 p.setPen(QColor(255, 255, 255, 40))
                 p.drawLine(PAD, y + BLOCK_GAP // 2, width - PAD, y + BLOCK_GAP // 2)
                 y += BLOCK_GAP
+            self._block_rects.append((QRect(0, y - PAD // 2, width, t_h + o_h + footer + PAD), idx))
             p.setFont(self._font(self.font_size, True))
             self._draw_text(p, QRect(PAD, y, width - 2 * PAD, t_h), Qt.TextWordWrap, translation)
             y += t_h
@@ -244,3 +296,11 @@ class CornerOverlay(_Bubble):
             color = (255, 196, 0) if offline else (160, 160, 175)
             self._draw_text(p, QRect(PAD, y, width - 2 * PAD, footer), Qt.AlignRight | Qt.AlignVCenter, label, color)
             y += footer
+        self._paint_overlay_state(p)
+
+    def entry_at(self, pos):
+        for rect, idx in self._block_rects:
+            if rect.contains(pos) and idx in self.entries:
+                original, translation = self.entries[idx][0], self.entries[idx][1]
+                return original, translation
+        return None
