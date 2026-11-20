@@ -73,10 +73,24 @@ def spellfix(text: str) -> str:
         return text
 
 
+VOWELS = set("aeiouyAEIOUYáéíóúÁÉÍÓÚ")
+
+
+def is_noise(line: str) -> bool:
+    """Líneas que el OCR saca de bordes o adornos: casi sin vocales o el mismo trozo repetido."""
+    letters = [c for c in line if c.isalpha()]
+    if len(letters) >= 6 and sum(c in VOWELS for c in letters) / len(letters) < 0.15:
+        return True
+    compact = re.sub(r"[^A-Za-z]", "", line)
+    if len(compact) >= 12 and len(set(compact.lower())) <= 3:
+        return True
+    return False
+
+
 def lines_to_paragraphs(lines: list[str]) -> str:
     """Une las líneas del OCR en párrafos (los diálogos suelen partirse en varias líneas)."""
     lines = [re.sub(r"\s+", " ", l).strip() for l in lines]
-    lines = [l for l in lines if l]
+    lines = [l for l in lines if l and not is_noise(l)]
     if not lines:
         return ""
     longest = max(len(l) for l in lines)

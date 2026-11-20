@@ -44,6 +44,40 @@ def cursor_pos_physical() -> tuple[int, int]:
     return pt.x, pt.y
 
 
+# Procesos del propio Windows que no cuentan como "juego en primer plano"
+SHELL_PROCESSES = {
+    "explorer.exe", "shellexperiencehost.exe", "searchhost.exe", "searchapp.exe",
+    "startmenuexperiencehost.exe", "lockapp.exe", "applicationframehost.exe", "taskmgr.exe",
+}
+
+
+def foreground_app() -> tuple[str, str]:
+    """(nombre del .exe en minúsculas, título de la ventana) de la ventana en primer plano."""
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return "", ""
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if pid.value == os.getpid():
+        return "", ""
+    length = user32.GetWindowTextLengthW(hwnd)
+    title_buf = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(hwnd, title_buf, length + 1)
+    exe = ""
+    h = kernel32.OpenProcess(0x1000, False, pid.value)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if h:
+        try:
+            buf = ctypes.create_unicode_buffer(1024)
+            size = wintypes.DWORD(1024)
+            if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                exe = os.path.basename(buf.value).lower()
+        finally:
+            kernel32.CloseHandle(h)
+    if exe in SHELL_PROCESSES:
+        return "", ""
+    return exe, title_buf.value
+
+
 _mutex = None
 
 

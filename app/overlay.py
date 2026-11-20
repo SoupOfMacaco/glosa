@@ -9,6 +9,7 @@ from .config import FLOAT_ABOVE, FLOAT_COVER
 PAD = 10
 CORNER_MARGIN = 24
 CORNER_MAX_WIDTH = 520
+BLOCK_GAP = 12
 
 
 def screen_for_physical_point(px: int, py: int):
@@ -135,47 +136,66 @@ class FloatingOverlay(_Bubble):
 
 
 class CornerOverlay(_Bubble):
-    """Traducción en una esquina de la pantalla, con el texto original opcional debajo."""
+    """Traducciones en una esquina de la pantalla: un bloque por zona, con el original opcional debajo."""
 
     def __init__(self):
         super().__init__()
         self.corner = "sup-der"
         self.show_original = True
-        self.source_label = ""
+        self.entries = {}       # índice de zona -> (original, traducción, fuente, sin_conexión)
+        self.zone_count = 1
         self._screen = None
 
-    def configure(self, corner: str, show_original: bool, region_rect: QRect | None):
-        self.corner, self.show_original = corner, show_original
+    def configure(self, corner: str, show_original: bool, region_rect: QRect | None, zone_count: int = 1):
+        self.corner, self.show_original, self.zone_count = corner, show_original, max(1, zone_count)
         self._screen = None
         if region_rect is not None and not region_rect.isNull():
             self._screen = QGuiApplication.screenAt(region_rect.center())
         self._relayout()
 
-    def set_text(self, original: str, translation: str, source: str, offline: bool = False):
-        self.original, self.translation, self.source_label, self.offline = original, translation, source, offline
+    def set_entry(self, index: int, original: str, translation: str, source: str, offline: bool = False):
+        self.entries[index] = (original, translation, source, offline)
+        self.offline = any(e[3] for e in self.entries.values())
         self._relayout()
         self.update()
 
-    def _layout_metrics(self, width):
+    def clear_entry(self, index: int):
+        self.entries.pop(index, None)
+        self.offline = any(e[3] for e in self.entries.values())
+        self._relayout()
+        self.update()
+
+    def clear_all(self):
+        self.entries = {}
+        self.offline = False
+
+    def has_entries(self) -> bool:
+        return bool(self.entries)
+
+    def _blocks(self, width):
+        """Medidas de cada bloque: (índice, entrada, alto traducción, alto original, alto pie)."""
         flags = Qt.TextWordWrap
         inner = QRect(0, 0, width - 2 * PAD, 10_000)
         fm_t = QFontMetrics(self._font(self.font_size, True))
-        t_h = fm_t.boundingRect(inner, flags, self.translation).height()
-        o_h = 0
-        if self.show_original and self.original:
-            fm_o = QFontMetrics(self._font(max(9, self.font_size - 4)))
-            o_h = fm_o.boundingRect(inner, flags, self.original).height() + 6
-        footer = QFontMetrics(self._font(10)).height() + 4
-        return t_h, o_h, footer
+        fm_o = QFontMetrics(self._font(max(9, self.font_size - 4)))
+        footer = QFontMetrics(self._font(10)).height() + 2
+        out = []
+        for idx in sorted(self.entries):
+            e = self.entries[idx]
+            t_h = fm_t.boundingRect(inner, flags, e[1]).height()
+            o_h = fm_o.boundingRect(inner, flags, e[0]).height() + 4 if self.show_original and e[0] else 0
+            out.append((idx, e, t_h, o_h, footer))
+        return out
 
     def _relayout(self):
-        if not self.translation:
+        if not self.entries:
             return
         screen = self._screen or QGuiApplication.primaryScreen()
         avail = screen.availableGeometry()
         width = min(CORNER_MAX_WIDTH, avail.width() - 2 * CORNER_MARGIN)
-        t_h, o_h, footer = self._layout_metrics(width)
-        height = t_h + o_h + footer + 2 * PAD
+        blocks = self._blocks(width)
+        height = sum(t + o + f for _, _, t, o, f in blocks) + BLOCK_GAP * (len(blocks) - 1) + 2 * PAD
+        height = min(height, avail.height() - 2 * CORNER_MARGIN)
         x = avail.right() - width - CORNER_MARGIN if self.corner.endswith("der") else avail.x() + CORNER_MARGIN
         y = avail.y() + CORNER_MARGIN if self.corner.startswith("sup") else avail.bottom() - height - CORNER_MARGIN
         self.setGeometry(QRect(QPoint(x, y), QPoint(x + width - 1, y + height - 1)))
@@ -185,19 +205,26 @@ class CornerOverlay(_Bubble):
         p.setRenderHint(QPainter.Antialiasing)
         self._paint_background(p)
         width = self.width()
-        t_h, o_h, footer = self._layout_metrics(width)
         y = PAD
-        p.setPen(QColor(255, 255, 255))
-        p.setFont(self._font(self.font_size, True))
-        p.drawText(QRect(PAD, y, width - 2 * PAD, t_h), Qt.TextWordWrap, self.translation)
-        y += t_h
-        if o_h:
-            y += 6
-            p.setPen(QColor(190, 190, 200))
-            p.setFont(self._font(max(9, self.font_size - 4)))
-            p.drawText(QRect(PAD, y, width - 2 * PAD, o_h), Qt.TextWordWrap, self.original)
-            y += o_h - 6
-        p.setPen(QColor(255, 196, 0) if self.offline else QColor(140, 140, 155))
-        p.setFont(self._font(10))
-        label = "⚠ sin conexión: se reintentará" if self.offline else f"vía {self.source_label}"
-        p.drawText(QRect(PAD, self.height() - PAD - footer + 4, width - 2 * PAD, footer), Qt.AlignRight, label)
+        blocks = self._blocks(width)
+        for n, (idx, (original, translation, source, offline), t_h, o_h, footer) in enumerate(blocks):
+            if n:
+                p.setPen(QColor(255, 255, 255, 40))
+                p.drawLine(PAD, y + BLOCK_GAP // 2, width - PAD, y + BLOCK_GAP // 2)
+                y += BLOCK_GAP
+            p.setPen(QColor(255, 255, 255))
+            p.setFont(self._font(self.font_size, True))
+            p.drawText(QRect(PAD, y, width - 2 * PAD, t_h), Qt.TextWordWrap, translation)
+            y += t_h
+            if o_h:
+                p.setPen(QColor(190, 190, 200))
+                p.setFont(self._font(max(9, self.font_size - 4)))
+                p.drawText(QRect(PAD, y + 4, width - 2 * PAD, o_h), Qt.TextWordWrap, original)
+                y += o_h
+            p.setPen(QColor(255, 196, 0) if offline else QColor(140, 140, 155))
+            p.setFont(self._font(10))
+            label = "⚠ sin conexión: se reintentará" if offline else f"vía {source}"
+            if self.zone_count > 1:
+                label = f"Zona {idx + 1}  ·  {label}"
+            p.drawText(QRect(PAD, y, width - 2 * PAD, footer), Qt.AlignRight | Qt.AlignVCenter, label)
+            y += footer

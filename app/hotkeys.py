@@ -13,10 +13,11 @@ MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_NOREPEAT = 0x1, 0x2, 0x4, 0x4000
 
 # id: (modificadores, tecla, descripción)
 HOTKEYS = {
-    1: (MOD_CONTROL | MOD_SHIFT, ord("T"), "Ctrl+Shift+T", "Seleccionar zona"),
+    1: (MOD_CONTROL | MOD_SHIFT, ord("T"), "Ctrl+Shift+T", "Editar las zonas del perfil (una o varias)"),
     2: (MOD_CONTROL | MOD_SHIFT, ord("P"), "Ctrl+Shift+P", "Pausar / reanudar"),
     3: (MOD_CONTROL | MOD_SHIFT, ord("M"), "Ctrl+Shift+M", "Cambiar modo de visualización"),
     4: (MOD_CONTROL | MOD_SHIFT, ord("H"), "Ctrl+Shift+H", "Ocultar / mostrar traducción"),
+    5: (MOD_CONTROL | MOD_SHIFT, ord("O"), "Ctrl+Shift+O", "Cambiar al siguiente perfil"),
 }
 
 

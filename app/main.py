@@ -4,12 +4,12 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QIcon, QPixmap
-from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QProgressDialog, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QInputDialog, QMenu, QMessageBox, QProgressDialog, QSystemTrayIcon
 
 from . import APP_ID, APP_NAME, APP_TAGLINE, GITHUB_REPO, LEGACY_APP_ID, __version__, ocr, winutil
-from .config import MODE_BOTH, MODE_CORNER, MODE_FLOAT, MODE_LABELS, MODES, Config
+from .config import DEFAULT_PROFILE, MODE_BOTH, MODE_CORNER, MODE_FLOAT, MODE_LABELS, MODES, Config
 from .hotkeys import HOTKEYS, HotkeyManager
 from .overlay import CornerOverlay, FloatingOverlay, physical_to_logical
 from .paths import data_dir, resource_path
@@ -32,31 +32,39 @@ def setup_logging():
         root.addHandler(logging.StreamHandler())
 
 
-class Controller:
+class Controller(QObject):
     def __init__(self, app: QApplication):
+        super().__init__()
         self.app = app
         self.cfg = Config.load()
         if winutil.migrate_autostart(LEGACY_APP_ID, APP_ID):
             self.cfg.autostart = True
-            self.cfg.save()
+        self.cfg.save()
         self.icon = QIcon(str(resource_path("assets", "icon.ico")))
         app.setWindowIcon(self.icon)
         self.translator = Translator(self.cfg.source_lang, self.cfg.target_lang)
         self.hidden = False
+        self.paused = False
         self.ocr_language = ""
-        self.has_text = False
-        self.worker = None
-
-        self.floating = FloatingOverlay()
+        self._ocr_error_shown = False
+        self.workers: list[LiveWorker] = []
+        self.floats: list[FloatingOverlay] = []
+        self.zone_has_text: dict[int, bool] = {}
         self.corner = CornerOverlay()
+
+        # Último juego (ventana externa) que estuvo en primer plano
+        self.fg_exe, self.fg_title = "", ""
+        self._pending_new_profile = None
+        self._profile_before_edit = None
+
         self.selector = RegionSelector()
-        self.selector.selected.connect(self.on_region_selected)
-        self.selector.canceled.connect(self.refresh_overlays)
+        self.selector.selected.connect(self.on_regions_selected)
+        self.selector.canceled.connect(self.on_selector_canceled)
 
         self.updater = Updater()
         self.updater.update_available.connect(self.on_update_available)
-        self.updater.up_to_date.connect(lambda: self._manual_check and self.notify("Ya tienes la última versión", f"Versión {__version__}"))
-        self.updater.check_failed.connect(lambda m: self._manual_check and self.notify("No se pudo comprobar", m))
+        self.updater.up_to_date.connect(self._on_up_to_date)
+        self.updater.check_failed.connect(self._on_check_failed)
         self._manual_check = False
 
         self.hotkeys = HotkeyManager()
@@ -65,21 +73,38 @@ class Controller:
         self.hotkeys.triggered.connect(self.on_hotkey)
 
         self._build_tray()
+        self.start_workers()
         self.apply_style()
-        self.start_worker()
+
+        self.fg_timer = QTimer(self)
+        self.fg_timer.timeout.connect(self.watch_foreground)
+        self.fg_timer.start(1500)
 
         if self.cfg.check_updates:
             QTimer.singleShot(4000, self.updater.check)
         if self.hotkeys.failed:
             self.notify("Algunos atajos no están disponibles", "Ya los usa otro programa: " + ", ".join(self.hotkeys.failed))
-        if self.cfg.first_run or not self.cfg.region:
+        if self.cfg.first_run or not any(p["regions"] for p in self.cfg.profiles):
             QTimer.singleShot(500, self.welcome)
+
+    @property
+    def profile(self) -> dict:
+        return self.cfg.active()
+
+    @property
+    def regions(self) -> list:
+        return self.profile["regions"]
 
     # ---------- bandeja ----------
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self.icon)
         menu = QMenu()
-        self.act_select = menu.addAction("Seleccionar zona…  (Ctrl+Shift+T)", self.selector_start)
+        self.act_profile_title = menu.addAction("")
+        self.act_profile_title.setEnabled(False)
+        menu.addAction("Editar zonas del perfil…  (Ctrl+Shift+T)", lambda: self.selector_start(from_menu=True))
+        self.profile_menu = menu.addMenu("Perfiles  (Ctrl+Shift+O cambia)")
+        self.profile_menu.aboutToShow.connect(self._fill_profile_menu)
+        menu.addSeparator()
         self.act_pause = menu.addAction("Pausar  (Ctrl+Shift+P)", self.toggle_pause)
         self.act_hide = menu.addAction("Ocultar traducción  (Ctrl+Shift+H)", self.toggle_hidden)
         mode_menu = menu.addMenu("Modo de visualización  (Ctrl+Shift+M)")
@@ -104,18 +129,49 @@ class Controller:
         self.tray.show()
         self.update_tooltip()
 
+    def _fill_profile_menu(self):
+        m = self.profile_menu
+        m.clear()
+        group = QActionGroup(m)
+        for p in self.cfg.profiles:
+            extra = [f"{len(p['regions'])} zona(s)"]
+            if p.get("game"):
+                extra.append(p["game"])
+            a = QAction(f"{p['name']}   ({', '.join(extra)})", m, checkable=True)
+            a.setChecked(p["name"] == self.cfg.active_profile)
+            a.triggered.connect(lambda _=False, n=p["name"]: self.switch_profile(n))
+            group.addAction(a)
+            m.addAction(a)
+        m.addSeparator()
+        m.addAction("Nuevo perfil…", self.new_profile)
+        m.addAction("Renombrar perfil actual…", self.rename_profile)
+        game = self.profile.get("game")
+        if game:
+            m.addAction(f"Desvincular del juego ({game})", self.unlink_game)
+        elif self.fg_exe:
+            m.addAction(f"Vincular al juego {self.fg_exe}", self.link_game)
+        a = m.addAction("Eliminar perfil actual…", self.delete_profile)
+        a.setEnabled(len(self.cfg.profiles) > 1)
+        m.addSeparator()
+        auto = QAction("Cambiar de perfil automáticamente según el juego", m, checkable=True)
+        auto.setChecked(self.cfg.auto_profile)
+        auto.toggled.connect(self.set_auto_profile)
+        m.addAction(auto)
+
     def on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
-            self.selector_start()
+            self.selector_start(from_menu=True)
 
     def update_tooltip(self):
-        state = "en pausa" if self.worker and self.worker.is_paused() else "leyendo"
-        if not self.cfg.region:
-            state = "sin zona seleccionada"
-        self.tray.setToolTip(f"{APP_NAME} {__version__} · {APP_TAGLINE}\n{state}")
+        n = len(self.regions)
+        state = "en pausa" if self.paused else f"leyendo {n} zona(s)"
+        if not n:
+            state = "sin zonas: pulsa Ctrl+Shift+T"
+        self.tray.setToolTip(f"{APP_NAME} {__version__} · {APP_TAGLINE}\nPerfil: {self.profile['name']} · {state}")
+        self.act_profile_title.setText(f"Perfil: {self.profile['name']}  ·  {n} zona(s)")
 
     def notify(self, title: str, msg: str):
-        self.tray.showMessage(title, msg, self.icon, 5000)
+        self.tray.showMessage(title, msg, self.icon, 4000)
 
     def welcome(self):
         keys = "\n".join(f"  {v[2]}: {v[3]}" for v in HOTKEYS.values())
@@ -129,83 +185,226 @@ class Controller:
             QMessageBox.NoIcon,
             APP_NAME,
             f"Bienvenido a {APP_NAME}, {APP_TAGLINE.lower()}.\n\n"
-            "Se queda en la bandeja del sistema (junto al reloj) y lee en vivo la zona que marques.\n\n"
-            f"Atajos:\n{keys}{extra}\n\nAhora marca la zona donde aparece el texto del juego.",
+            "Se queda en la bandeja del sistema (junto al reloj) y lee en vivo las zonas que marques. "
+            "Puedes marcar varias (por ejemplo, diálogos arriba y abajo) y se guardan en un perfil por juego.\n\n"
+            f"Atajos:\n{keys}{extra}\n\nAbre el juego y pulsa Ctrl+Shift+T desde él: el perfil queda asociado "
+            "a ese juego y se activa solo la próxima vez que lo abras.",
         )
         box.setIconPixmap(QPixmap(str(resource_path("assets", "logo.png"))).scaledToWidth(96, Qt.SmoothTransformation))
         box.exec()
         self.cfg.first_run = False
         self.cfg.save()
-        self.selector_start()
 
     # ---------- lectura en vivo ----------
-    def start_worker(self):
-        if self.worker:
-            self.worker.stop()
-        self.worker = LiveWorker(self.cfg, self.translator)
-        self.worker.translated.connect(self.on_translated)
-        self.worker.cleared.connect(self.on_cleared)
-        self.worker.ocr_ready.connect(self.on_ocr_ready)
-        self.worker.failed.connect(lambda m: QMessageBox.critical(None, APP_NAME, f"No se pudo iniciar el OCR de Windows:\n{m}"))
-        self.worker.start()
+    def start_workers(self):
+        for w in self.workers:
+            w.stop()
+        self.workers = []
+        for f in self.floats:
+            f.hide()
+            f.deleteLater()
+        self.floats = []
+        self.zone_has_text = {}
+        self.corner.clear_all()
+        for i, region in enumerate(self.regions):
+            w = LiveWorker(self.cfg, self.translator, region, i)
+            w.translated.connect(self.on_translated)
+            w.cleared.connect(self.on_cleared)
+            w.ocr_ready.connect(self.on_ocr_ready)
+            w.failed.connect(self.on_ocr_failed)
+            w.set_paused(self.paused)
+            w.start()
+            self.workers.append(w)
+            self.floats.append(FloatingOverlay())
+        self.refresh_overlays()
+        self.update_tooltip()
 
     def on_ocr_ready(self, lang):
         self.ocr_language = lang
 
-    def on_translated(self, original, translation, source, ok):
-        log.info("[%s] %r -> %r", source, original, translation)
-        self.has_text = True
-        self.floating.set_text(translation, offline=not ok)
-        self.corner.set_text(original, translation, source, offline=not ok)
+    def on_ocr_failed(self, msg):
+        if not self._ocr_error_shown:
+            self._ocr_error_shown = True
+            QMessageBox.critical(None, APP_NAME, f"No se pudo iniciar el OCR de Windows:\n{msg}")
+
+    def on_translated(self, index, original, translation, source, ok):
+        if index >= len(self.floats):
+            return  # resultado de un perfil anterior
+        log.info("[zona %d · %s] %r -> %r", index + 1, source, original, translation)
+        self.zone_has_text[index] = True
+        self.floats[index].set_text(translation, offline=not ok)
+        self.corner.set_entry(index, original, translation, source, offline=not ok)
         self.refresh_overlays()
 
-    def on_cleared(self):
-        if self.cfg.hide_when_empty:
-            self.has_text = False
+    def on_cleared(self, index):
+        if self.cfg.hide_when_empty and index < len(self.floats):
+            self.zone_has_text[index] = False
+            self.corner.clear_entry(index)
             self.refresh_overlays()
 
     def refresh_overlays(self):
-        paused = self.worker is not None and self.worker.is_paused()
-        visible = self.has_text and not self.hidden and not paused and bool(self.cfg.region)
+        visible = not self.hidden and not self.paused and not self.selector.is_active()
         mode = self.cfg.display_mode
-        for widget, wanted in ((self.floating, mode in (MODE_FLOAT, MODE_BOTH)), (self.corner, mode in (MODE_CORNER, MODE_BOTH))):
-            if visible and wanted:
-                widget.show()
-                widget.raise_()
+        want_float = visible and mode in (MODE_FLOAT, MODE_BOTH)
+        for i, f in enumerate(self.floats):
+            if want_float and self.zone_has_text.get(i):
+                f.show()
+                f.raise_()
             else:
-                widget.hide()
+                f.hide()
+        if visible and mode in (MODE_CORNER, MODE_BOTH) and self.corner.has_entries():
+            self.corner.show()
+            self.corner.raise_()
+        else:
+            self.corner.hide()
 
     def apply_style(self):
-        rect = physical_to_logical(self.cfg.region) if self.cfg.region else None
-        for w in (self.floating, self.corner):
+        rects = [physical_to_logical(r) for r in self.regions]
+        for w in [self.corner, *self.floats]:
             w.apply_style(self.cfg.font_size, self.cfg.opacity)
-        if rect is not None:
-            self.floating.set_region(rect, self.cfg.float_position)
-        self.corner.configure(self.cfg.corner, self.cfg.show_original, rect)
-        self.floating.update()
+        for f, rect in zip(self.floats, rects):
+            f.set_region(rect, self.cfg.float_position)
+            f.update()
+        self.corner.configure(self.cfg.corner, self.cfg.show_original, rects[0] if rects else None, len(rects))
         self.corner.update()
         self.refresh_overlays()
 
-    # ---------- acciones ----------
-    def selector_start(self):
-        self.floating.hide()
-        self.corner.hide()
-        self.selector.start()
+    # ---------- perfiles ----------
+    def watch_foreground(self):
+        exe, title = winutil.foreground_app()
+        if not exe:
+            return
+        self.fg_exe, self.fg_title = exe, title
+        if self.cfg.auto_profile and not self.selector.is_active():
+            p = self.cfg.profile_for_game(exe)
+            if p and p["name"] != self.cfg.active_profile:
+                self.switch_profile(p["name"], reason="juego detectado")
 
-    def on_region_selected(self, region):
-        self.cfg.region = region
+    def switch_profile(self, name: str, reason: str = ""):
+        if not self.cfg.get_profile(name):
+            return
+        self.cfg.active_profile = name
         self.cfg.save()
-        self.has_text = False
-        self.worker.set_region(region)
+        self.start_workers()
         self.apply_style()
-        self.update_tooltip()
-        log.info("Zona seleccionada: %s", region)
+        msg = f"{len(self.regions)} zona(s)" + (f" · {reason}" if reason else "")
+        self.notify(f"Perfil: {name}", msg)
+        log.info("Perfil activo: %s (%s)", name, msg)
+
+    def cycle_profile(self):
+        names = [p["name"] for p in self.cfg.profiles]
+        if len(names) > 1:
+            i = names.index(self.cfg.active_profile) if self.cfg.active_profile in names else 0
+            self.switch_profile(names[(i + 1) % len(names)])
+
+    def _game_display_name(self) -> str:
+        title = (self.fg_title or "").strip()
+        if not title or len(title) > 40:
+            title = self.fg_exe.rsplit(".", 1)[0]
+        return title or "Perfil"
+
+    def new_profile(self):
+        suggestion = self._game_display_name() if self.fg_exe else ""
+        name, ok = QInputDialog.getText(None, APP_NAME, "Nombre del nuevo perfil:", text=suggestion)
+        if not ok or not name.strip():
+            return
+        p = self.cfg.add_profile(name.strip())
+        self.switch_profile(p["name"])
+        self.selector_start(from_menu=True)
+
+    def rename_profile(self):
+        p = self.profile
+        name, ok = QInputDialog.getText(None, APP_NAME, "Nuevo nombre del perfil:", text=p["name"])
+        if ok and name.strip() and name.strip() != p["name"]:
+            p["name"] = self.cfg.unique_name(name.strip())
+            self.cfg.active_profile = p["name"]
+            self.cfg.save()
+            self.update_tooltip()
+
+    def delete_profile(self):
+        if len(self.cfg.profiles) <= 1:
+            return
+        p = self.profile
+        if QMessageBox.question(None, APP_NAME, f"¿Eliminar el perfil «{p['name']}» y sus zonas?") != QMessageBox.Yes:
+            return
+        self.cfg.profiles.remove(p)
+        self.switch_profile(self.cfg.profiles[0]["name"])
+
+    def link_game(self):
+        if not self.fg_exe:
+            return
+        other = self.cfg.profile_for_game(self.fg_exe)
+        if other:
+            other["game"] = ""
+        self.profile["game"] = self.fg_exe
+        self.cfg.save()
+        self.notify(f"Perfil: {self.profile['name']}", f"Vinculado a {self.fg_exe}")
+
+    def unlink_game(self):
+        self.profile["game"] = ""
+        self.cfg.save()
+
+    def set_auto_profile(self, on: bool):
+        self.cfg.auto_profile = on
+        self.cfg.save()
+
+    # ---------- acciones ----------
+    def selector_start(self, from_menu: bool = False):
+        """Edita las zonas. Lanzado desde un juego (atajo), usa o crea el perfil de ese juego."""
+        if self.selector.is_active():
+            return
+        exe, title = winutil.foreground_app()
+        if exe:
+            self.fg_exe, self.fg_title = exe, title
+        self._pending_new_profile = None
+        self._profile_before_edit = self.cfg.active_profile
+        if self.fg_exe and self.cfg.auto_profile and not from_menu:
+            target = self.cfg.profile_for_game(self.fg_exe)
+            current = self.profile
+            if target is None and current.get("game") and current["game"] != self.fg_exe:
+                target = self.cfg.add_profile(self._game_display_name(), self.fg_exe)
+                self._pending_new_profile = target["name"]
+            if target is not None and target["name"] != self.cfg.active_profile:
+                self.cfg.active_profile = target["name"]
+                self.start_workers()
+                self.apply_style()
+        self.selector.start(self.regions, self.profile["name"])
+        self.refresh_overlays()
+
+    def on_regions_selected(self, regions):
+        p = self.profile
+        p["regions"] = regions
+        if not p.get("game") and self.fg_exe and self.cfg.auto_profile and not self.cfg.profile_for_game(self.fg_exe):
+            p["game"] = self.fg_exe
+            if p["name"] == DEFAULT_PROFILE:
+                p["name"] = self.cfg.unique_name(self._game_display_name())
+                self.cfg.active_profile = p["name"]
+        self._pending_new_profile = None
+        self.cfg.save()
+        self.start_workers()
+        self.apply_style()
+        game = f" · {p['game']}" if p.get("game") else ""
+        self.notify(f"Perfil: {p['name']}", f"{len(regions)} zona(s) guardadas{game}")
+        log.info("Perfil %s: zonas %s, juego %s", p["name"], regions, p.get("game"))
+
+    def on_selector_canceled(self):
+        if self._pending_new_profile:
+            p = self.cfg.get_profile(self._pending_new_profile)
+            if p and not p["regions"]:
+                self.cfg.profiles.remove(p)
+            self._pending_new_profile = None
+            if self.cfg.get_profile(self._profile_before_edit or ""):
+                self.cfg.active_profile = self._profile_before_edit
+            self.start_workers()
+            self.apply_style()
+        self.refresh_overlays()
 
     def toggle_pause(self):
-        paused = not self.worker.is_paused()
-        self.worker.set_paused(paused)
-        self.act_pause.setText(("Reanudar" if paused else "Pausar") + "  (Ctrl+Shift+P)")
-        self.notify(APP_NAME, "En pausa" if paused else "Leyendo en vivo")
+        self.paused = not self.paused
+        for w in self.workers:
+            w.set_paused(self.paused)
+        self.act_pause.setText(("Reanudar" if self.paused else "Pausar") + "  (Ctrl+Shift+P)")
+        self.notify(APP_NAME, "En pausa" if self.paused else "Leyendo en vivo")
         self.refresh_overlays()
         self.update_tooltip()
 
@@ -226,7 +425,14 @@ class Controller:
         self.notify("Modo de visualización", MODE_LABELS[nxt])
 
     def on_hotkey(self, hid):
-        {1: self.selector_start, 2: self.toggle_pause, 3: self.cycle_mode, 4: self.toggle_hidden}[hid]()
+        actions = {
+            1: self.selector_start,
+            2: self.toggle_pause,
+            3: self.cycle_mode,
+            4: self.toggle_hidden,
+            5: self.cycle_profile,
+        }
+        actions[hid]()
 
     def open_settings(self):
         dlg = SettingsDialog(
@@ -242,7 +448,8 @@ class Controller:
                 self.translator.set_languages(self.cfg.source_lang, self.cfg.target_lang)
             self.mode_actions[self.cfg.display_mode].setChecked(True)
             self.apply_style()
-            self.worker.force_refresh()
+            for w in self.workers:
+                w.force_refresh()
 
     def install_english_ocr(self):
         cmd = (
@@ -252,7 +459,7 @@ class Controller:
         if winutil.run_elevated("powershell.exe", cmd):
             self.notify("Instalando OCR en inglés", "Cuando termine, la app empezará a usarlo sola.")
             self._ocr_poll_left = 120
-            self._ocr_timer = QTimer()
+            self._ocr_timer = QTimer(self)
             self._ocr_timer.timeout.connect(self._poll_english_ocr)
             self._ocr_timer.start(5000)
 
@@ -260,7 +467,8 @@ class Controller:
         self._ocr_poll_left -= 1
         if ocr.has_language("en"):
             self._ocr_timer.stop()
-            self.start_worker()
+            self.start_workers()
+            self.apply_style()
             self.notify("OCR en inglés listo", "Ahora la lectura en inglés será más precisa.")
         elif self._ocr_poll_left <= 0:
             self._ocr_timer.stop()
@@ -269,6 +477,14 @@ class Controller:
     def manual_update_check(self):
         self._manual_check = True
         self.updater.check()
+
+    def _on_up_to_date(self):
+        if self._manual_check:
+            self.notify("Ya tienes la última versión", f"Versión {__version__}")
+
+    def _on_check_failed(self, msg):
+        if self._manual_check:
+            self.notify("No se pudo comprobar", msg)
 
     def on_update_available(self, version, notes, url):
         notes = notes.strip()[:1200]
@@ -288,8 +504,12 @@ class Controller:
         self.progress.show()
         self.updater.progress.connect(self.progress.setValue)
         self.updater.downloaded.connect(self.on_update_downloaded)
-        self.updater.download_failed.connect(lambda m: (self.progress.close(), QMessageBox.warning(None, APP_NAME, f"Falló la descarga:\n{m}")))
+        self.updater.download_failed.connect(self._on_download_failed)
         self.updater.download(url)
+
+    def _on_download_failed(self, msg):
+        self.progress.close()
+        QMessageBox.warning(None, APP_NAME, f"Falló la descarga:\n{msg}")
 
     def on_update_downloaded(self, path):
         self.progress.close()
@@ -298,8 +518,8 @@ class Controller:
 
     def quit(self):
         self.hotkeys.unregister_all()
-        if self.worker:
-            self.worker.stop()
+        for w in self.workers:
+            w.stop()
         self.translator.close()
         self.tray.hide()
         self.app.quit()

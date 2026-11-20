@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 SOURCE_MEMORY = "memoria"
 SOURCE_GLOSSARY = "glosario"
 SOURCE_OFFLINE = "sin conexión"
+SOURCE_SAME = "mismo idioma"
 
 
 def normalize(text: str) -> str:
@@ -35,6 +36,7 @@ class TranslationResult:
         self.text = text
         self.source = source
         self.ok = ok
+        self.same_language = source == SOURCE_SAME
 
 
 class Translator:
@@ -71,7 +73,7 @@ class Translator:
         key = normalize(text)
         with self._lock:
             row = self._db.execute(
-                "SELECT traduccion FROM traducciones WHERE src_lang=? AND dst_lang=? AND clave=?",
+                "SELECT traduccion, fuente FROM traducciones WHERE src_lang=? AND dst_lang=? AND clave=?",
                 (self.source_lang, self.target_lang, key),
             ).fetchone()
             if row:
@@ -80,7 +82,7 @@ class Translator:
                     (self.source_lang, self.target_lang, key),
                 )
                 self._db.commit()
-                return TranslationResult(text, row[0], SOURCE_MEMORY)
+                return TranslationResult(text, row[0], SOURCE_SAME if row[1] == SOURCE_SAME else SOURCE_MEMORY)
         if key in self._glossary:
             return TranslationResult(text, self._glossary[key], SOURCE_GLOSSARY)
         stripped = key.rstrip(".!?")
@@ -107,19 +109,22 @@ class Translator:
             self._db.commit()
 
     # ---------- internet ----------
-    def _google(self, text: str) -> str:
+    def _google(self, text: str) -> tuple[str, str]:
+        """Devuelve (traducción, idioma detectado). Con sl=auto también detecta textos que ya están traducidos."""
         r = self._session.get(
             "https://translate.googleapis.com/translate_a/single",
-            params={"client": "gtx", "sl": self.source_lang, "tl": self.target_lang, "dt": "t", "q": text},
+            params={"client": "gtx", "sl": "auto", "tl": self.target_lang, "dt": "t", "q": text},
             timeout=5,
         )
         r.raise_for_status()
-        out = "".join(seg[0] for seg in r.json()[0] if seg and seg[0])
+        data = r.json()
+        out = "".join(seg[0] for seg in data[0] if seg and seg[0])
         if not out:
             raise ValueError("respuesta vacía")
-        return out
+        detected = data[2] if len(data) > 2 and isinstance(data[2], str) else ""
+        return out, detected
 
-    def _mymemory(self, text: str) -> str:
+    def _mymemory(self, text: str) -> tuple[str, str]:
         r = self._session.get(
             "https://api.mymemory.translated.net/get",
             params={"q": text, "langpair": f"{self.source_lang}|{self.target_lang}"},
@@ -129,12 +134,15 @@ class Translator:
         data = r.json()
         if str(data.get("responseStatus")) != "200":
             raise ValueError(data.get("responseDetails") or "error de MyMemory")
-        return data["responseData"]["translatedText"]
+        return data["responseData"]["translatedText"], self.source_lang
 
     def translate_online(self, text: str) -> TranslationResult:
         for name, fn in (("Google", self._google), ("MyMemory", self._mymemory)):
             try:
-                out = fn(text)
+                out, detected = fn(text)
+                if detected and detected.split("-")[0] == self.target_lang:
+                    self._store(text, text, SOURCE_SAME)
+                    return TranslationResult(text, text, SOURCE_SAME)
                 self._store(text, out, name)
                 return TranslationResult(text, out, name)
             except Exception as e:

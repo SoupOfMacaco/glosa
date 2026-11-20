@@ -32,21 +32,36 @@ Se queda en segundo plano, junto al reloj, mientras juegas.
 ## Cómo se usa
 
 1. Pon el juego en **modo ventana** o **ventana sin bordes** (ver limitaciones).
-2. Pulsa **Ctrl+Shift+T** y arrastra un rectángulo sobre el cuadro de diálogo.
-3. Listo: cada vez que cambie el texto, aparecerá la traducción.
+2. Con el juego en primer plano, pulsa **Ctrl+Shift+T** y arrastra un rectángulo sobre cada zona donde salga texto. Puedes marcar **varias**, por ejemplo los diálogos de arriba y los de abajo. Pulsa **Enter** para guardar.
+3. Listo: cada vez que cambie el texto de cualquier zona, aparecerá su traducción.
+
+En el editor de zonas: **clic derecho** sobre una zona la quita, **Retroceso** quita la última, **Supr** las quita todas y **Esc** cancela sin guardar.
 
 | Atajo | Acción |
 |---|---|
-| `Ctrl+Shift+T` | Seleccionar la zona a leer |
+| `Ctrl+Shift+T` | Editar las zonas del perfil (una o varias) |
+| `Ctrl+Shift+O` | Cambiar al siguiente perfil |
 | `Ctrl+Shift+P` | Pausar / reanudar |
 | `Ctrl+Shift+M` | Cambiar el modo: flotante, esquina o ambos |
 | `Ctrl+Shift+H` | Ocultar / mostrar la traducción |
 
-Todo lo demás está en el menú del icono de la bandeja (clic derecho): ajustes, buscar actualizaciones, abrir la carpeta de datos y salir.
+Todo lo demás está en el menú del icono de la bandeja (clic derecho): perfiles, ajustes, buscar actualizaciones, abrir la carpeta de datos y salir.
+
+### Perfiles por juego
+
+Cada juego pone los diálogos en un sitio distinto, así que las zonas se guardan en **perfiles**:
+
+- Si pulsas `Ctrl+Shift+T` **desde el juego**, las zonas se guardan en un perfil vinculado a ese juego (por su `.exe`), con el nombre de su ventana. Si ese juego no tenía perfil, se crea uno.
+- La próxima vez que abras ese juego, **Glosa cambia sola a su perfil** en cuanto la ventana del juego pasa a primer plano.
+- Desde la bandeja (**Perfiles**) puedes cambiar de perfil a mano, crear uno nuevo, renombrarlo, vincularlo o desvincularlo de un juego, eliminarlo, o desactivar el cambio automático.
+- Los perfiles se guardan en `%APPDATA%\Glosa\config.json`.
 
 ## Qué hace
 
 - **Lectura en vivo continua.** Revisa la zona varias veces por segundo (cada 250 ms por defecto, ajustable). No hay que recargar ni pulsar nada.
+- **Varias zonas a la vez**, cada una con su propio lector, y **perfiles por juego** que se activan solos.
+- **No traduce lo que ya está en español**: si una zona muestra texto que ya está en el idioma de destino, no aparece ninguna traducción.
+- **Ignora la basura del OCR**, como las líneas sin sentido que salen de bordes y adornos del cuadro de diálogo.
 - **Detecta el texto que se escribe letra a letra** y espera a que termine antes de traducir, para no traducir frases a medias. Si el fondo está siempre animado, lee igualmente cada pocos segundos.
 - **No repite trabajo**: si el texto no cambia, no se vuelve a leer ni a traducir.
 - **Traducción híbrida (con y sin internet):**
@@ -56,7 +71,7 @@ Todo lo demás está en el menú del icono de la bandeja (clic derecho): ajustes
   4. **Sin conexión**: muestra el texto original con un aviso y reintenta cada 5 segundos.
 - **Dos formas de mostrar la traducción**, o las dos a la vez:
   - **Flotante**: sobre el texto original, ya sea tapándolo o justo encima.
-  - **Esquina**: en la esquina que elijas, con el texto original debajo si quieres.
+  - **Esquina**: en la esquina que elijas, con el texto original debajo si quieres. Con varias zonas, se apila un bloque por zona, etiquetado como "Zona 1", "Zona 2"...
 - **La traducción no estorba al OCR.** Las ventanas de traducción están excluidas de las capturas de pantalla, así que la app nunca lee su propia traducción, aunque tape el texto original.
 - **Corrige errores típicos del OCR** con fuentes pixeladas (por ejemplo `suyvive` → `survive`).
 - **Las ventanas de traducción no reciben clics**: el ratón pasa a través, al juego.
@@ -69,7 +84,8 @@ Todo lo demás está en el menú del icono de la bandeja (clic derecho): ajustes
 - **No es perfecta leyendo.** El OCR puede fallar alguna letra con fuentes muy estilizadas, texto sobre fondos muy cargados o letras muy pequeñas. Marcar solo el cuadro de texto, sin decoración alrededor, ayuda mucho.
 - **La traducción es automática.** A veces sale literal o pierde el tono de un personaje.
 - **No lee voz ni subtítulos de vídeo con efectos.** Solo texto visible y estático o que se va escribiendo.
-- **Una sola zona a la vez.**
+- **El cambio automático de perfil reconoce el juego por su `.exe`.** Si dos juegos usan el mismo ejecutable (por ejemplo, juegos de navegador o emuladores), comparten perfil, así que cambia entre ellos a mano con `Ctrl+Shift+O`.
+- **Cada zona consume algo de CPU.** Con 2 o 3 zonas no se nota; con muchas, sube el intervalo en Ajustes.
 - **Las ventanas de traducción no salen en grabaciones ni streams** (OBS, capturas de Windows...), porque están excluidas de la captura a propósito. Esto requiere Windows 10 versión 2004 o posterior. En versiones anteriores, el modo "tapando el texto" pasa automáticamente a "justo encima".
 - **Sin Linux ni macOS.** Usa el OCR propio de Windows.
 
@@ -122,7 +138,8 @@ py -3.12 -m venv .venv
 | `app/textfix.py` | Une líneas en párrafos y corrige errores del OCR |
 | `app/translator.py` | Memoria SQLite, glosario y servicios online |
 | `app/overlay.py` | Ventanas flotantes (sobre el texto y en la esquina) |
-| `app/selector.py` | Selección de la zona con el ratón (multimonitor y DPI) |
+| `app/selector.py` | Editor de zonas con el ratón: varias zonas, multimonitor y DPI |
+| `app/config.py` | Ajustes y perfiles (zonas y juego vinculado) |
 | `app/updater.py` | Comprobación y descarga de actualizaciones |
 | `app/data/glosario.json` | Frases incluidas de serie |
 | `installer/setup.iss` | Instalador (Inno Setup) |
@@ -143,7 +160,7 @@ py -3.12 -m venv .venv
 ## Ideas para el futuro
 
 - Leer la traducción en voz alta (texto a voz).
-- Varias zonas a la vez y perfiles por juego.
+- Opciones de visualización distintas para cada perfil.
 - Más servicios de traducción (DeepL con clave propia, LibreTranslate, modelos locales).
 - Editar a mano las traducciones guardadas.
 

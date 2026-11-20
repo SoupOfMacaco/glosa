@@ -23,18 +23,19 @@ SIMILARITY_SKIP = 0.93      # textos casi iguales no se vuelven a traducir
 
 
 class LiveWorker(QThread):
-    translated = Signal(str, str, str, bool)   # original, traducción, fuente, ok
-    cleared = Signal()
-    ocr_ready = Signal(str)                    # idioma del OCR en uso
+    translated = Signal(int, str, str, str, bool)   # zona, original, traducción, fuente, ok
+    cleared = Signal(int)                           # zona
+    ocr_ready = Signal(str)                         # idioma del OCR en uso
     failed = Signal(str)
 
-    def __init__(self, config, translator: Translator):
+    def __init__(self, config, translator: Translator, region, index: int = 0):
         super().__init__()
         self.config = config
         self.translator = translator
+        self.index = index
         self._stop = threading.Event()
         self._paused = False
-        self._region = list(config.region) if config.region else None
+        self._region = list(region) if region else None
         self._reset = True
         self._seq = 0
         self._ocr_lang_pref = config.source_lang
@@ -143,9 +144,9 @@ class LiveWorker(QThread):
                         empty_count += 1
                         if empty_count >= 2 and last_text:
                             last_text, failed_text = "", None
-                            self.cleared.emit()
+                            self.cleared.emit(self.index)
                         elif empty_count >= 2:
-                            self.cleared.emit()
+                            self.cleared.emit(self.index)
                     else:
                         empty_count = 0
                         retrying = failed_text is not None and text == failed_text
@@ -182,6 +183,9 @@ class LiveWorker(QThread):
                 return
             if not res.ok:
                 self._last_failed = text
-            self.translated.emit(res.original, res.text, res.source, res.ok)
+            if res.same_language:
+                self.cleared.emit(self.index)  # ya está en el idioma de destino: no hace falta traducir
+                return
+            self.translated.emit(self.index, res.original, res.text, res.source, res.ok)
 
         future.add_done_callback(done)

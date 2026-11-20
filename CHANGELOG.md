@@ -2,6 +2,14 @@
 
 Este proyecto usa [versionado semántico](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.2.0] - 2026-11-20
+
+- **Varias zonas a la vez**: el editor de zonas (`Ctrl+Shift+T`) permite marcar varias, por ejemplo diálogos arriba y abajo. Cada zona tiene su propio lector y su traducción flotante, y en la esquina se apilan como "Zona 1", "Zona 2"...
+- **Perfiles**: las zonas se guardan en perfiles. Al marcarlas desde un juego, el perfil queda vinculado a ese juego y se activa solo al volver a jugarlo. Menú **Perfiles** en la bandeja y atajo `Ctrl+Shift+O` para cambiar de perfil.
+- Ya no traduce texto que ya está en español, como ventanas de Windows u otros programas en la zona.
+- Ignora las líneas basura que el OCR saca de bordes y adornos.
+- La zona que tenías en versiones anteriores se conserva en el perfil "General".
+
 ## [1.1.0] - 2026-11-20
 
 - La app pasa a llamarse **Glosa** y estrena logo.

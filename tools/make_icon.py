@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
+from PySide6.QtCore import QBuffer, QIODevice, Qt
 from PySide6.QtGui import QGuiApplication, QImage, QPainter
 from PySide6.QtSvg import QSvgRenderer
 

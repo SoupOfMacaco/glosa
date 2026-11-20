@@ -39,6 +39,9 @@ TARGET_LANGS = {
 }
 
 
+DEFAULT_PROFILE = "General"
+
+
 @dataclass
 class Config:
     # Zona a leer en píxeles físicos de pantalla: [x, y, ancho, alto]
@@ -59,6 +62,11 @@ class Config:
     autostart: bool = False
     check_updates: bool = True
     first_run: bool = True
+    # Perfiles: cada uno con una o varias zonas y, opcionalmente, el juego (.exe) al que pertenece
+    #   {"name": "Chained Echoes", "regions": [[x, y, w, h], ...], "game": "chainedechoes.exe"}
+    profiles: list = field(default_factory=list)
+    active_profile: str = ""
+    auto_profile: bool = True       # cambiar de perfil solo al cambiar de juego
 
     @classmethod
     def path(cls):
@@ -79,7 +87,45 @@ class Config:
             log.exception("No se pudo leer la configuración; se usan valores por defecto")
         if cfg.display_mode not in MODES:
             cfg.display_mode = MODE_BOTH
+        # Migración desde versiones con una sola zona
+        if cfg.region and not cfg.profiles:
+            cfg.profiles = [{"name": DEFAULT_PROFILE, "regions": [list(cfg.region)], "game": ""}]
+            cfg.active_profile = DEFAULT_PROFILE
+        cfg.region = []
+        cfg.active()
         return cfg
+
+    # ---------- perfiles ----------
+    def get_profile(self, name: str) -> dict | None:
+        return next((p for p in self.profiles if p["name"] == name), None)
+
+    def active(self) -> dict:
+        """Perfil activo (crea uno por defecto si no hay ninguno)."""
+        if not self.profiles:
+            self.profiles.append({"name": DEFAULT_PROFILE, "regions": [], "game": ""})
+        p = self.get_profile(self.active_profile)
+        if p is None:
+            p = self.profiles[0]
+            self.active_profile = p["name"]
+        p.setdefault("regions", [])
+        p.setdefault("game", "")
+        return p
+
+    def profile_for_game(self, exe: str) -> dict | None:
+        exe = (exe or "").lower()
+        return next((p for p in self.profiles if exe and p.get("game", "").lower() == exe), None)
+
+    def unique_name(self, base: str) -> str:
+        base = (base or "Perfil").strip()[:40] or "Perfil"
+        name, n = base, 2
+        while self.get_profile(name):
+            name, n = f"{base} ({n})", n + 1
+        return name
+
+    def add_profile(self, name: str, game: str = "") -> dict:
+        p = {"name": self.unique_name(name), "regions": [], "game": (game or "").lower()}
+        self.profiles.append(p)
+        return p
 
     def save(self) -> None:
         tmp = self.path().with_suffix(".tmp")
