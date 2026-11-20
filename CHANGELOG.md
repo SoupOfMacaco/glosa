@@ -2,6 +2,10 @@
 
 Este proyecto usa [versionado semántico](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.3.3] - 2026-11-20
+
+- **Arreglo de las actualizaciones**: si Glosa estaba abierta, el instalador en modo silencioso, que es el que usa el botón "Actualizar" de la app, se cancelaba sin avisar. Ahora espera a que Glosa se cierre y, si sigue abierta, la cierra él mismo. Al instalar a mano, avisa de que la va a cerrar.
+
 ## [1.3.2] - 2026-11-20
 
 - **Licencia**: cambia a **PolyForm Shield 1.0.0**. Se permite cualquier uso, también en empresas y en el trabajo. No se permite venderla ni ofrecerla como otro producto que compita con Glosa. El README tiene un resumen en español.

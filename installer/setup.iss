@@ -40,7 +40,8 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
-AppMutex=GlosaMutex,TraductorEnVivoMutex
+; Sin AppMutex: en modo silencioso cancelaba la instalación si Glosa estaba abierta.
+; Ahora InitializeSetup (abajo) espera a que se cierre y, si hace falta, la cierra.
 CloseApplications=force
 RestartApplications=no
 
@@ -82,6 +83,47 @@ Filename: "{app}\{#AppExe}"; Description: "Abrir {#AppName}"; Flags: nowait post
 Filename: "{cmd}"; Parameters: "/C taskkill /IM {#AppExe} /F"; Flags: runhidden; RunOnceId: "KillApp"
 
 [Code]
+const
+  AppMutexes = 'GlosaMutex,TraductorEnVivoMutex';
+
+function WaitAppClosed(Tenths: Integer): Boolean;
+var
+  i: Integer;
+begin
+  for i := 1 to Tenths do
+  begin
+    if not CheckForMutexes(AppMutexes) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    Sleep(100);
+  end;
+  Result := not CheckForMutexes(AppMutexes);
+end;
+
+function InitializeSetup: Boolean;
+var
+  rc: Integer;
+begin
+  Result := True;
+  if not CheckForMutexes(AppMutexes) then
+    Exit;
+  { Actualización desde la propia app: le damos unos segundos para que se cierre sola }
+  if WaitAppClosed(50) then
+    Exit;
+  if not WizardSilent then
+    if MsgBox('Glosa está abierta. Se cerrará para poder instalar la nueva versión y se volverá a abrir al terminar.',
+              mbInformation, MB_OKCANCEL) <> IDOK then
+    begin
+      Result := False;
+      Exit;
+    end;
+  Exec(ExpandConstant('{cmd}'), '/C taskkill /IM Glosa.exe /F & taskkill /IM TraductorEnVivo.exe /F', '',
+       SW_HIDE, ewWaitUntilTerminated, rc);
+  WaitAppClosed(50);
+end;
+
 function NeedsEnglishOcr: Boolean;
 begin
   { Las actualizaciones automáticas son silenciosas: no deben pedir permisos de administrador }

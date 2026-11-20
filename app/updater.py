@@ -79,5 +79,11 @@ class Updater(QObject):
 
     @staticmethod
     def launch_installer(path: str):
-        # /SILENT muestra solo la barra de progreso; el instalador cierra la app y la vuelve a abrir al terminar
-        subprocess.Popen([path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"], close_fds=True)
+        # /SILENT muestra solo la barra de progreso. El instalador espera a que la app se cierre
+        # (o la cierra él) y la vuelve a abrir al terminar. Se lanza desacoplado para que sobreviva al cierre.
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        subprocess.Popen(
+            [path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"],
+            close_fds=True,
+            creationflags=flags,
+        )
