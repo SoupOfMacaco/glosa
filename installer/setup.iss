@@ -28,9 +28,9 @@ PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
 OutputBaseFilename=Glosa-Setup-{#AppVersion}
 SetupIconFile=..\assets\icon.ico
-; Muestra la licencia (uso no comercial) y hay que aceptarla para instalar. Las actualizaciones silenciosas no la muestran.
+; Muestra la licencia y hay que aceptarla para instalar. Las actualizaciones silenciosas no la muestran.
 LicenseFile=..\LICENSE
-AppCopyright=Copyright (c) 2026 SoupOfMacaco. Uso no comercial (PolyForm Noncommercial 1.0.0).
+AppCopyright=Copyright (c) 2026 SoupOfMacaco. Licencia PolyForm Shield 1.0.0 (prohibido venderla o redistribuirla como otro producto).
 WizardSmallImageFile=..\assets\wizard-small.bmp
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}

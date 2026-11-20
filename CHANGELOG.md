@@ -2,6 +2,10 @@
 
 Este proyecto usa [versionado semántico](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.3.2] - 2026-11-20
+
+- **Licencia**: cambia a **PolyForm Shield 1.0.0**. Se permite cualquier uso, también en empresas y en el trabajo. No se permite venderla ni ofrecerla como otro producto que compita con Glosa. El README tiene un resumen en español.
+
 ## [1.3.1] - 2026-11-20
 
 - Nueva descripción: Glosa es un **traductor de escritorio en tiempo real**, para el día a día, el trabajo o los estudios, los juegos y más, no solo para juegos.

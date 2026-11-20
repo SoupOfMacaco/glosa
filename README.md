@@ -12,7 +12,7 @@
 Sirve para cualquier cosa que tenga texto en pantalla:
 
 - **Día a día:** programas, páginas o aplicaciones que solo están en inglés, chats, notificaciones.
-- **Trabajo y estudios:** documentación, herramientas o cursos en otro idioma (respetando la [licencia](#licencia-uso-personal-y-no-comercial)).
+- **Trabajo y estudios:** documentación, herramientas o cursos en otro idioma (también dentro de empresas, ver la [licencia](#licencia-libre-para-usar-prohibido-venderla)).
 - **Juegos:** diálogos, misiones y menús, con perfiles que se activan solos según el juego.
 - **Y más:** vídeos con subtítulos incrustados, emuladores, novelas visuales...
 
@@ -174,25 +174,23 @@ py -3.12 -m venv .venv
 - Más servicios de traducción (DeepL con clave propia, LibreTranslate, modelos locales).
 - Editar a mano las traducciones guardadas.
 
-## Licencia: uso personal y no comercial
+## Licencia: libre para usar, prohibido venderla
 
-Glosa se distribuye bajo la licencia **[PolyForm Noncommercial 1.0.0](LICENSE)**. **No se permite ningún uso comercial.**
+Glosa se distribuye bajo la licencia **[PolyForm Shield 1.0.0](LICENSE)**. El código es abierto y **cualquiera puede usarla gratis, también empresas**. Lo que no se permite es **venderla ni ofrecerla como otro producto**.
 
 Resumen orientativo en español (el texto que vale legalmente es el del archivo [LICENSE](LICENSE), en inglés):
 
 | ✅ Se permite | ❌ No se permite |
 |---|---|
-| Usarla gratis para uso **personal y privado**: jugar, estudiar, aficiones | **Venderla**, cobrar por ella o por instalarla |
-| Modificar el código para uso propio no comercial | Incluirla en productos o servicios comerciales |
-| Compartirla **gratis**, siempre con esta licencia y el aviso de copyright | Usarla en o para una empresa con fines de lucro |
-| Uso por organizaciones sin ánimo de lucro, centros educativos e instituciones públicas | Quitar la licencia o el aviso de copyright al compartirla |
-
-**¿Y en el trabajo?** Se permite para tus estudios o tu formación personal y en organizaciones sin ánimo de lucro, centros educativos e instituciones públicas. **No** se permite en el trabajo para una empresa con fines de lucro, porque eso cuenta como uso comercial; para eso hace falta permiso del autor.
+| Usarla gratis en casa, para estudiar, para jugar... | **Venderla**, revenderla o cobrar por ella |
+| **Usarla en empresas y en el trabajo**, por ejemplo para empleados que no dominan el inglés | **Ofrecerla como otro producto** (renombrada, modificada o integrada en un traductor propio), aunque sea gratis |
+| Leer el código, modificarlo y adaptarlo para uso propio o de tu empresa | Usar el código para crear un producto o servicio que compita con Glosa |
+| Compartirla gratis, siempre con esta licencia y el aviso de copyright | Quitar la licencia o el aviso de copyright al compartirla |
 
 El software se ofrece **tal cual, sin garantías**.
 
-Para un uso comercial hace falta un permiso aparte del autor: abre un *issue* en este repositorio.
+Si quieres hacer algo que la licencia no permite, como integrarla en un producto propio, pide permiso al autor abriendo un *issue* en este repositorio.
 
-> Nota: las versiones 1.0.0 a 1.2.0 se publicaron por error con licencia MIT. Desde la 1.3.0, todo el proyecto usa PolyForm Noncommercial. Esto no es asesoramiento legal.
+> Nota: las versiones 1.0.0 a 1.2.0 se publicaron con licencia MIT, y la 1.3.0 y la 1.3.1 con PolyForm Noncommercial. Desde la 1.3.2, el proyecto usa PolyForm Shield 1.0.0. Esto no es asesoramiento legal.
 
 Copyright © 2026 SoupOfMacaco.
