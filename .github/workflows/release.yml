@@ -45,7 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: instalador
-          path: dist/TraductorEnVivo-Setup-*.exe
+          path: dist/Glosa-Setup-*.exe
 
       - name: Notas de la versión desde el CHANGELOG
         if: startsWith(github.ref, 'refs/tags/')
@@ -61,6 +61,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: Traductor en Vivo ${{ github.ref_name }}
+          name: Glosa ${{ github.ref_name }}
           body_path: release-notes.md
-          files: dist/TraductorEnVivo-Setup-*.exe
+          files: dist/Glosa-Setup-*.exe

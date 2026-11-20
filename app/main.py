@@ -4,11 +4,11 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QIcon
+from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QProgressDialog, QSystemTrayIcon
 
-from . import APP_ID, APP_NAME, GITHUB_REPO, __version__, ocr, winutil
+from . import APP_ID, APP_NAME, APP_TAGLINE, GITHUB_REPO, LEGACY_APP_ID, __version__, ocr, winutil
 from .config import MODE_BOTH, MODE_CORNER, MODE_FLOAT, MODE_LABELS, MODES, Config
 from .hotkeys import HOTKEYS, HotkeyManager
 from .overlay import CornerOverlay, FloatingOverlay, physical_to_logical
@@ -36,7 +36,11 @@ class Controller:
     def __init__(self, app: QApplication):
         self.app = app
         self.cfg = Config.load()
+        if winutil.migrate_autostart(LEGACY_APP_ID, APP_ID):
+            self.cfg.autostart = True
+            self.cfg.save()
         self.icon = QIcon(str(resource_path("assets", "icon.ico")))
+        app.setWindowIcon(self.icon)
         self.translator = Translator(self.cfg.source_lang, self.cfg.target_lang)
         self.hidden = False
         self.ocr_language = ""
@@ -108,7 +112,7 @@ class Controller:
         state = "en pausa" if self.worker and self.worker.is_paused() else "leyendo"
         if not self.cfg.region:
             state = "sin zona seleccionada"
-        self.tray.setToolTip(f"{APP_NAME} {__version__}: {state}")
+        self.tray.setToolTip(f"{APP_NAME} {__version__} · {APP_TAGLINE}\n{state}")
 
     def notify(self, title: str, msg: str):
         self.tray.showMessage(title, msg, self.icon, 5000)
@@ -121,12 +125,15 @@ class Controller:
                 "\n\nConsejo: tu Windows no tiene el OCR en inglés instalado (se usa "
                 f"{self.ocr_language}). Funciona, pero lee mejor el inglés si lo instalas desde Ajustes."
             )
-        QMessageBox.information(
-            None,
+        box = QMessageBox(
+            QMessageBox.NoIcon,
             APP_NAME,
-            "La app se queda en la bandeja del sistema (junto al reloj) y lee en vivo la zona que marques.\n\n"
+            f"Bienvenido a {APP_NAME}, {APP_TAGLINE.lower()}.\n\n"
+            "Se queda en la bandeja del sistema (junto al reloj) y lee en vivo la zona que marques.\n\n"
             f"Atajos:\n{keys}{extra}\n\nAhora marca la zona donde aparece el texto del juego.",
         )
+        box.setIconPixmap(QPixmap(str(resource_path("assets", "logo.png"))).scaledToWidth(96, Qt.SmoothTransformation))
+        box.exec()
         self.cfg.first_run = False
         self.cfg.save()
         self.selector_start()

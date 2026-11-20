@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Empaquetado con PyInstaller:  pyinstaller TraductorEnVivo.spec --noconfirm
+# Empaquetado con PyInstaller:  pyinstaller Glosa.spec --noconfirm
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 datas = [("app/data", "app/data"), ("assets", "assets")]
@@ -40,9 +40,9 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="TraductorEnVivo",
+    name="Glosa",
     icon="assets/icon.ico",
     console=False,
     upx=False,
 )
-coll = COLLECT(exe, a.binaries, a.datas, name="TraductorEnVivo", upx=False)
+coll = COLLECT(exe, a.binaries, a.datas, name="Glosa", upx=False)

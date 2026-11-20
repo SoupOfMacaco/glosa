@@ -76,6 +76,21 @@ def set_autostart(enabled: bool, value_name: str) -> None:
         log.exception("No se pudo cambiar el inicio automático")
 
 
+def migrate_autostart(old_name: str, new_name: str) -> bool:
+    """Si la versión antigua tenía inicio automático, lo pasa al nombre nuevo. Devuelve True si existía."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as key:
+            try:
+                winreg.QueryValueEx(key, old_name)
+            except FileNotFoundError:
+                return False
+            winreg.DeleteValue(key, old_name)
+    except OSError:
+        return False
+    set_autostart(True, new_name)
+    return True
+
+
 def run_elevated(exe: str, params: str) -> bool:
     """Ejecuta un programa pidiendo permisos de administrador (UAC)."""
     shell32 = ctypes.WinDLL("shell32")

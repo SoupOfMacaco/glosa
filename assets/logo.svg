@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2B2F8F"/>
+      <stop offset="1" stop-color="#7A3FE4"/>
+    </linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC94A"/>
+      <stop offset="1" stop-color="#FF9F1C"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <!-- bocadillo original (texto del juego) -->
+  <path d="M58 92 h104 a24 24 0 0 1 24 24 v52 a24 24 0 0 1 -24 24 h-62 l-30 26 v-26 h-12 a24 24 0 0 1 -24 -24 v-52 a24 24 0 0 1 24 -24 z" fill="#FFFFFF"/>
+  <rect x="58" y="124" width="96" height="12" rx="6" fill="#B9BCE0"/>
+  <rect x="58" y="148" width="68" height="12" rx="6" fill="#B9BCE0"/>
+  <!-- glosa flotante (la traducción) -->
+  <path d="M140 34 h70 a22 22 0 0 1 22 22 v44 a22 22 0 0 1 -22 22 h-36 l-26 22 v-22 h-8 a22 22 0 0 1 -22 -22 v-44 a22 22 0 0 1 22 -22 z" fill="url(#amber)" stroke="#2B2F8F" stroke-width="6"/>
+  <text x="176" y="106" font-family="Segoe UI, Arial, sans-serif" font-weight="800" font-size="78" text-anchor="middle" fill="#2B2F8F">ñ</text>
+</svg>

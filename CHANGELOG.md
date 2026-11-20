@@ -2,6 +2,12 @@
 
 Este proyecto usa [versionado semántico](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.1.0] - 2026-11-20
+
+- La app pasa a llamarse **Glosa** y estrena logo.
+- El instalador ofrece instalar el OCR en inglés de Windows, con la casilla marcada por defecto, para que al abrir la app ya esté todo listo. Sigue disponible también en Ajustes.
+- Al actualizar desde la 1.0.0 se conservan la memoria de traducciones, los ajustes y el inicio con Windows, y se borran los accesos directos antiguos.
+
 ## [1.0.0] - 2026-11-20
 
 Primera versión.

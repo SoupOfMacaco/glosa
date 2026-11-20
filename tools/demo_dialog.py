@@ -56,7 +56,7 @@ if "--set-region" in sys.argv:
     def save_region():
         r = wintypes.RECT()
         ctypes.windll.user32.GetWindowRect(int(label.winId()), ctypes.byref(r))
-        cfg_path = Path(os.environ["APPDATA"]) / "TraductorEnVivo" / "config.json"
+        cfg_path = Path(os.environ["APPDATA"]) / "Glosa" / "config.json"
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
         cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
         cfg.update(region=[r.left, r.top, r.right - r.left, r.bottom - r.top], first_run=False)

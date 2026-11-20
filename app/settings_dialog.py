@@ -31,7 +31,7 @@ def _combo(options: dict, current: str) -> QComboBox:
 class SettingsDialog(QDialog):
     def __init__(self, config, ocr_language: str, memory_size: int, on_install_english, on_clear_memory, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Ajustes · Traductor en Vivo")
+        self.setWindowTitle("Ajustes · Glosa")
         self.setMinimumWidth(460)
         self.config = config
         lay = QVBoxLayout(self)

@@ -1,4 +1,11 @@
-# Traductor en Vivo
+<p align="center">
+  <img src="assets/logo.png" width="128" alt="Logo de Glosa">
+</p>
+
+<h1 align="center">Glosa</h1>
+<p align="center"><b>Traductor en vivo para juegos</b> · gratis · Windows 10 y 11</p>
+
+> **¿Por qué "Glosa"?** Una glosa es una nota que se escribe junto a un texto para explicarlo o traducirlo. Las *Glosas Emilianenses*, anotaciones al margen de un texto en latín, se consideran de los primeros escritos en español. Esta app hace lo mismo: pone la traducción encima del texto, como una nota flotante.
 
 Aplicación gratuita para **Windows 10 y 11** que lee en tiempo real el texto en inglés de una zona de la pantalla (por ejemplo, el cuadro de diálogo de un juego) y te muestra la traducción al español en una ventana flotante, sin tener que pulsar nada cada vez que cambia el texto.
 
@@ -16,8 +23,8 @@ Se queda en segundo plano, junto al reloj, mientras juegas.
 
 ## Descarga e instalación
 
-1. Ve a [**Releases**](https://github.com/SoupOfMacaco/traductor-en-vivo/releases/latest) y descarga `TraductorEnVivo-Setup-X.Y.Z.exe`.
-2. Ejecútalo. **No pide permisos de administrador**: se instala solo para tu usuario.
+1. Ve a [**Releases**](https://github.com/SoupOfMacaco/glosa/releases/latest) y descarga `Glosa-Setup-X.Y.Z.exe`.
+2. Ejecútalo. Se instala solo para tu usuario y **no necesita administrador**. Si a tu Windows le falta el OCR en inglés, el instalador trae una casilla marcada para instalarlo; ese paso sí pide permiso de administrador, una sola vez. Al terminar, ya está todo listo para usar.
 3. Al abrirla por primera vez te explica los atajos y te pide marcar la zona del texto.
 
 > Windows SmartScreen puede avisar de que el programa "no es reconocido" porque no está firmado digitalmente (los certificados cuestan dinero). Pulsa **Más información → Ejecutar de todas formas**. El código está entero en este repositorio.
@@ -70,7 +77,9 @@ Todo lo demás está en el menú del icono de la bandeja (clic derecho): ajustes
 
 La app usa el OCR que trae Windows. Si tu Windows está en español, lo normal es que solo tenga el OCR en español, que lee el inglés razonablemente bien pero confunde más letras.
 
-Para mejorarlo: **Ajustes → Idioma del OCR → Instalar OCR en inglés…**. Pide permiso de administrador una vez y, cuando termine, la app empieza a usarlo sola. Equivale a ejecutar en PowerShell como administrador:
+Por eso el **instalador lo instala automáticamente** si falta, con la casilla "Instalar el OCR en inglés de Windows", marcada por defecto. Las actualizaciones automáticas nunca vuelven a pedirlo.
+
+Si desmarcaste la casilla, puedes instalarlo después desde **Ajustes → Idioma del OCR → Instalar OCR en inglés…**. Cuando termine, la app empieza a usarlo sola. Las dos opciones equivalen a ejecutar en PowerShell como administrador:
 
 ```powershell
 Add-WindowsCapability -Online -Name "Language.OCR~~~en-US~0.0.1.0"
@@ -80,7 +89,7 @@ Add-WindowsCapability -Online -Name "Language.OCR~~~en-US~0.0.1.0"
 
 - La lectura de pantalla (OCR) se hace **en tu PC**, sin internet. Las imágenes nunca se envían a ningún sitio.
 - Solo el **texto reconocido** que no esté ya en la memoria local se envía a Google Translate (o a MyMemory si Google falla) para traducirlo.
-- La memoria de traducciones, la configuración y el registro se guardan en `%APPDATA%\TraductorEnVivo\`. Puedes vaciar la memoria desde Ajustes.
+- La memoria de traducciones, la configuración y el registro se guardan en `%APPDATA%\Glosa\`. Puedes vaciar la memoria desde Ajustes.
 - La comprobación de actualizaciones consulta la API pública de GitHub.
 
 > Los servicios de traducción usados son gratuitos y no oficiales, o con límites diarios: el endpoint público de Google y la API anónima de MyMemory (unas 5000 palabras al día). Si alguno deja de funcionar, la app usa el otro, y la memoria local sigue funcionando siempre.
@@ -93,8 +102,8 @@ Add-WindowsCapability -Online -Name "Language.OCR~~~en-US~0.0.1.0"
 ## Para desarrolladores
 
 ```powershell
-git clone https://github.com/SoupOfMacaco/traductor-en-vivo
-cd traductor-en-vivo
+git clone https://github.com/SoupOfMacaco/glosa
+cd glosa
 py -3.12 -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt pyinstaller
 .\.venv\Scripts\python -m app          # ejecutar desde el código
