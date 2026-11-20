@@ -1,0 +1,66 @@
+name: Release
+
+# Al subir una etiqueta vX.Y.Z se compila la app, se crea el instalador
+# y se publica una Release en GitHub. La app instalada la detecta y se actualiza sola.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Comprobar que la versión coincide con la etiqueta
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path app\__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$v" -ne "${{ github.ref_name }}") { throw "app/__init__.py dice $v pero la etiqueta es ${{ github.ref_name }}" }
+
+      - name: Instalar Inno Setup si falta
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+
+      - name: Compilar app e instalador
+        shell: pwsh
+        run: .\build.ps1
+
+      - name: Guardar artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: instalador
+          path: dist/TraductorEnVivo-Setup-*.exe
+
+      - name: Notas de la versión desde el CHANGELOG
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart("v")
+          $text = Get-Content CHANGELOG.md -Raw -Encoding utf8
+          $m = [regex]::Match($text, "(?ms)^## \[$([regex]::Escape($v))\][^\n]*\n(.*?)(?=^## \[|\z)")
+          $notes = if ($m.Success) { $m.Groups[1].Value.Trim() } else { "Versión $v" }
+          Set-Content -Path release-notes.md -Value $notes -Encoding utf8
+
+      - name: Publicar Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Traductor en Vivo ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: dist/TraductorEnVivo-Setup-*.exe
